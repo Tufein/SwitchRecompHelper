@@ -8,6 +8,12 @@ import com.tufein.switchrecomphelper.core.io.RandomAccessSource
 import com.tufein.switchrecomphelper.core.io.readFully
 import com.tufein.switchrecomphelper.core.io.slice
 import java.io.OutputStream
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 /** Where extracted files go. Paths are relative, '/'-separated and already validated. */
 interface OutputSink {
@@ -87,23 +93,110 @@ class SwitchExtractor(private val keys: KeySet) {
         val total = planned.sumOf { it.data.size }
         var done = 0L
         listener.progress(0, total)
-        val buffer = ByteArray(1 shl 20)
-        for ((i, p) in planned.withIndex()) {
-            listener.status("(${i + 1}/${planned.size}) ${p.path}")
-            sink.create(p.path).use { out ->
-                var pos = 0L
-                while (pos < p.data.size) {
-                    if (listener.cancelled) throw ExtractionCancelledException()
-                    val n = minOf(buffer.size.toLong(), p.data.size - pos).toInt()
-                    p.data.readFully(pos, buffer, 0, n)
-                    out.write(buffer, 0, n)
-                    pos += n
-                    done += n
+        Copier().use { copier ->
+            // Opening the next output file (slow on Android's SAF) overlaps with copying the current one.
+            var next: CompletableFuture<OutputStream>? = planned.firstOrNull()?.let { openAsync(copier.opener, sink, it.path) }
+            try {
+                for ((i, p) in planned.withIndex()) {
+                    listener.status("(${i + 1}/${planned.size}) ${p.path}")
+                    val current = next!!
+                    next = planned.getOrNull(i + 1)?.let { openAsync(copier.opener, sink, it.path) }
+                    val base = done
+                    await(current).use { out ->
+                        copier.copy(p.data, out, { listener.cancelled }) { written -> listener.progress(base + written, total) }
+                    }
+                    done += p.data.size
                     listener.progress(done, total)
                 }
+                next = null
+            } finally {
+                // On failure/cancel: don't leak the stream opened ahead of time.
+                next?.let { f -> runCatching { await(f).close() } }
             }
         }
         return ExtractionResult(titles, planned.size, total)
+    }
+
+    /** Unwraps the real error (e.g. IOException) from a failed background open. */
+    private fun await(f: CompletableFuture<OutputStream>): OutputStream =
+        try {
+            f.get()
+        } catch (e: java.util.concurrent.ExecutionException) {
+            throw e.cause ?: e
+        }
+
+    private fun openAsync(executor: ExecutorService, sink: OutputSink, path: String): CompletableFuture<OutputStream> =
+        CompletableFuture.supplyAsync({ sink.create(path) }, executor)
+
+    /**
+     * Copies a source to a stream with reading/decrypting and writing on separate threads, so slow storage
+     * (SAF writes) and AES work overlap instead of alternating.
+     */
+    private class Copier : AutoCloseable {
+        private val writer: ExecutorService = Executors.newSingleThreadExecutor(daemon("xci-writer"))
+        val opener: ExecutorService = Executors.newSingleThreadExecutor(daemon("xci-opener"))
+        private val free = ArrayBlockingQueue<ByteArray>(DEPTH).also { q -> repeat(DEPTH) { q.add(ByteArray(BUFFER)) } }
+
+        private class Chunk(val buf: ByteArray, val len: Int)
+
+        fun copy(src: RandomAccessSource, out: OutputStream, cancelled: () -> Boolean, onWritten: (Long) -> Unit) {
+            val size = src.size
+            if (size == 0L) return
+            val full = ArrayBlockingQueue<Chunk>(DEPTH + 1)
+            val written = AtomicLong()
+            val error = AtomicReference<Throwable?>()
+            val eof = Chunk(ByteArray(0), -1)
+            val job = writer.submit {
+                while (true) {
+                    val c = full.take()
+                    if (c === eof) break
+                    // After a write failure keep draining so the reader never blocks.
+                    if (error.get() == null) {
+                        try {
+                            out.write(c.buf, 0, c.len)
+                            written.addAndGet(c.len.toLong())
+                        } catch (t: Throwable) {
+                            error.set(t)
+                        }
+                    }
+                    free.put(c.buf)
+                }
+            }
+            try {
+                var pos = 0L
+                while (pos < size) {
+                    if (cancelled()) throw ExtractionCancelledException()
+                    error.get()?.let { throw it }
+                    val buf = free.take()
+                    val n = minOf(BUFFER.toLong(), size - pos).toInt()
+                    try {
+                        src.readFully(pos, buf, 0, n)
+                    } catch (t: Throwable) {
+                        free.put(buf)
+                        throw t
+                    }
+                    full.put(Chunk(buf, n))
+                    pos += n
+                    onWritten(written.get())
+                }
+            } finally {
+                full.put(eof)
+                job.get()
+            }
+            error.get()?.let { throw it }
+            onWritten(written.get())
+        }
+
+        override fun close() {
+            writer.shutdownNow()
+            opener.shutdownNow()
+        }
+
+        private companion object {
+            const val BUFFER = 4 shl 20
+            const val DEPTH = 3
+            fun daemon(name: String) = java.util.concurrent.ThreadFactory { r -> Thread(r, name).apply { isDaemon = true } }
+        }
     }
 
     companion object {

@@ -9,6 +9,12 @@ Android-app die een XCI-dump van je **eigen** Switch-cartridge uitpakt naar **Ex
 3. Kies de `.xci`-dump en een uitvoermap (Storage Access Framework, geen opslagrechten nodig).
 4. Uitpakken. Resultaat: `<naam>_extracted/<programId>/exefs/…` en `…/romfs/…`.
 
+## Nieuw in 0.2.0
+- Nieuw icoon (cartridge + uitpak-pijl, ook als themed icon) en een opgeschoonde Material 3-layout met licht/donker thema.
+- Sneller uitpakken: lezen/ontsleutelen en schrijven lopen parallel, en het volgende uitvoerbestand wordt alvast aangemaakt. Voortgang toont nu ook snelheid en resterende tijd.
+- Onboarding bij de eerste start (opnieuw te openen via het vraagteken rechtsboven).
+- Fix: prod.keys kiezen crashte op Android 8–12.
+
 ## Ondersteund
 - XCI (ook met 0x1000-certificaatblok), HFS0, NCA2/NCA3, AES-CTR secties, PFS0 (ExeFS), RomFS (IVFC).
 - Standaard key-area-crypto en titlekeys (via `title.keys`-regels in hetzelfde bestand).

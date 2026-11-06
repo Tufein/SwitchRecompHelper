@@ -2,6 +2,8 @@ package com.tufein.switchrecomphelper.core
 
 import com.tufein.switchrecomphelper.core.crypto.AesUtil
 import com.tufein.switchrecomphelper.core.io.ByteArraySource
+import com.tufein.switchrecomphelper.core.io.readFully
+import com.tufein.switchrecomphelper.core.io.slice
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import kotlin.test.Test
@@ -131,5 +133,60 @@ class ExtractorTest {
         val key = ByteArray(32) { it.toByte() }
         val data = ByteArray(0x600) { (it * 7).toByte() }
         assertContentEquals(data, AesUtil.xtsDecrypt(key, AesUtil.xtsEncrypt(key, data, 3), 3))
+    }
+
+    @Test
+    fun largeFilesSpanSeveralPipelineBuffers() {
+        val big = TestImage(3)
+        val data = ByteArray(9 * 1024 * 1024 + 123).also { java.util.Random(5).nextBytes(it) }
+        val program = big.nca(0, listOf(Triple(0, big.romfs(mapOf("big.bin" to data, "small" to byteArrayOf(9))), 3)))
+        val sink = MemorySink()
+        SwitchExtractor(KeySet.parse(big.keyText)).extract(ByteArraySource(big.xci(mapOf("p.nca" to program))), sink)
+        assertContentEquals(data, sink.bytes("${"%016x".format(big.programId)}/romfs/big.bin"))
+    }
+
+    @Test
+    fun writeFailureIsReportedAndDoesNotHang() {
+        val failing = object : OutputSink {
+            override fun create(relativePath: String): OutputStream = object : OutputStream() {
+                override fun write(b: Int) = throw java.io.IOException("disk full")
+                override fun write(b: ByteArray, off: Int, len: Int) = throw java.io.IOException("disk full")
+            }
+        }
+        val e = assertFailsWith<java.io.IOException> {
+            SwitchExtractor(keys).extract(ByteArraySource(img.standardXci()), failing)
+        }
+        assertEquals("disk full", e.message)
+    }
+
+    @Test
+    fun createFailureIsUnwrapped() {
+        val failing = object : OutputSink {
+            override fun create(relativePath: String): OutputStream = throw java.io.IOException("cannot create")
+        }
+        val e = assertFailsWith<java.io.IOException> {
+            SwitchExtractor(keys).extract(ByteArraySource(img.standardXci()), failing)
+        }
+        assertEquals("cannot create", e.message)
+    }
+
+    @Test
+    fun ctrReadsAtArbitraryOffsetsMatchSequentialRead() {
+        val big = TestImage(4)
+        val payload = ByteArray(100_000).also { java.util.Random(6).nextBytes(it) }
+        val nca = com.tufein.switchrecomphelper.core.fs.Nca(
+            ByteArraySource(big.nca(0, listOf(Triple(0, big.romfs(mapOf("f" to payload)), 3)))),
+            KeySet.parse(big.keyText),
+        )
+        val section = nca.openFilesystem(nca.sections[0])
+        val file = com.tufein.switchrecomphelper.core.fs.RomFs.list(section).single()
+        val rnd = java.util.Random(8)
+        repeat(200) {
+            val off = rnd.nextInt(payload.size - 1)
+            val len = 1 + rnd.nextInt(minOf(5000, payload.size - off))
+            val buf = ByteArray(len)
+            section.slice(file.offset, file.size).readFully(off.toLong(), buf)
+            assertContentEquals(payload.copyOfRange(off, off + len), buf, "off=$off len=$len")
+        }
     }
 }
