@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Switch Recomp Helper</string>
-    <string name="step_keys">1. Sleutels (prod.keys)</string>
-    <string name="step_xci">2. XCI-dump</string>
-    <string name="step_out">3. Uitvoermap</string>
+    <string name="step_keys">Sleutels (prod.keys)</string>
+    <string name="step_xci">Dump-bestand</string>
+    <string name="step_out">Uitvoermap</string>
     <string name="btn_pick_keys">Kies prod.keys</string>
-    <string name="btn_pick_xci">Kies XCI-bestand</string>
+    <string name="btn_pick_xci">Kies XCI, NSP of NSZ</string>
     <string name="btn_pick_out">Kies uitvoermap</string>
     <string name="cb_exefs">ExeFS uitpakken</string>
     <string name="cb_romfs">RomFS uitpakken</string>
@@ -22,7 +22,7 @@
     <string name="need_all">Kies eerst sleutels, XCI en uitvoermap</string>
     <string name="need_part">Kies ExeFS en/of RomFS</string>
     <string name="title_line">Titel %1$s → %2$d ExeFS-, %3$d RomFS-bestanden</string>
-    <string name="tagline">XCI uitpakken naar ExeFS en RomFS</string>
+    <string name="tagline">XCI, NSP en NSZ uitpakken naar ExeFS en RomFS</string>
     <string name="help">Uitleg</string>
     <string name="options">Wat uitpakken?</string>
     <string name="details_show">Details tonen</string>
@@ -31,13 +31,13 @@
     <string name="onb_next">Volgende</string>
     <string name="onb_start">Aan de slag</string>
     <string name="onb_1_title">Welkom bij Switch Recomp Helper</string>
-    <string name="onb_1_body">Met deze app pak je een dump van je eigen Switch-cartridge uit naar ExeFS en RomFS: de twee onderdelen die je nodig hebt voor bijvoorbeeld static recompilation.\n\nAlles gebeurt op je telefoon; er wordt niets geüpload.</string>
+    <string name="onb_1_body">Pak een dump van je eigen Switch-game uit naar ExeFS en RomFS: de twee onderdelen die je nodig hebt voor bijvoorbeeld static recompilation.\n\nOndersteund: XCI (cartridge-dump), NSP en NSZ (gecomprimeerde NSP).\n\nAlles gebeurt op je telefoon; er wordt niets geüpload.</string>
     <string name="onb_2_title">Wat heb je nodig?</string>
-    <string name="onb_2_body">• Een XCI-dump van een cartridge die je zelf bezit.\n• Je eigen prod.keys, gedumpt van je eigen Switch (bijvoorbeeld met Lockpick_RCM).\n\nDe app bevat zelf geen sleutels of spelbestanden en deelt ze ook niet.</string>
+    <string name="onb_2_body">• Een dump van een game die je zelf bezit: een .xci-, .nsp- of .nsz-bestand.\n• Je eigen prod.keys, gedumpt van je eigen Switch (bijvoorbeeld met Lockpick_RCM).\n• Bij NSP en NSZ haalt de app de titelsleutel uit de tickets (.tik) in het bestand. Staat die er niet in, zet dan de titelsleutel als regel in je keys-bestand (title.keys-formaat).\n\nDe app bevat zelf geen sleutels of spelbestanden.</string>
     <string name="onb_3_title">Zo werkt het</string>
-    <string name="onb_3_body">1. Kies je prod.keys. Dat hoeft maar één keer: de app onthoudt ze.\n2. Kies het XCI-bestand.\n3. Kies de map waar het resultaat in komt.\n4. Zet ExeFS en/of RomFS aan en tik op Uitpakken.</string>
+    <string name="onb_3_body">1. Kies je prod.keys. Dat hoeft maar één keer: de app onthoudt ze.\n2. Kies je dump (XCI, NSP of NSZ).\n3. Kies de map waar het resultaat in komt.\n4. Zet ExeFS en/of RomFS aan en tik op Uitpakken.\n\nTijdens het uitpakken zie je voortgang, snelheid en resterende tijd. Tik op Annuleren om te stoppen.</string>
     <string name="onb_4_title">Resultaat en tips</string>
-    <string name="onb_4_body">De bestanden komen in een nieuwe map met de naam van je dump + _extracted, per titel gesplitst in exefs en romfs.\n\n• Zorg voor genoeg vrije ruimte: RomFS is vaak enkele GB.\n• Houd de app open tijdens het uitpakken; het scherm blijft dan aan.\n• Tik rechtsboven op het vraagteken om deze uitleg opnieuw te zien.</string>
+    <string name="onb_4_body">De bestanden komen in een nieuwe map met de naam van je dump + _extracted, per titel gesplitst in exefs en romfs.\n\n• Zorg voor genoeg vrije ruimte: RomFS is vaak enkele GB.\n• Houd de app open tijdens het uitpakken; het scherm blijft dan aan.\n• Een NSZ is gecomprimeerd en kost wat meer rekentijd.\n• Updates en DLC (patches) worden niet ondersteund: kies de basisgame.</string>
     <string name="speed_fmt">%1$s/s</string>
     <string name="eta_fmt">Nog ongeveer %1$s</string>
     <string name="eta_calculating">Resterende tijd berekenen…</string>
@@ -45,4 +45,7 @@
     <string name="dur_ms">%1$d min %2$d s</string>
     <string name="dur_hm">%1$d u %2$d min</string>
     <string name="percent_fmt">%1$d%%</string>
+    <string name="onb_5_title">Er gaat iets mis?</string>
+    <string name="onb_5_body">• \"header_key\" of \"NCA header could not be decrypted\": je prod.keys passen niet bij deze dump of zijn onvolledig.\n• \"master_key_xx is missing\": je keys komen van een oudere firmware dan de game vraagt. Dump nieuwe keys.\n• \"title key … not in your key file\": bij een NSP/NSZ zonder ticket, voeg de titelsleutel toe.\n• \"truncated\": het bestand is niet volledig gekopieerd.\n\nTik rechtsboven op het vraagteken om deze uitleg opnieuw te zien.</string>
+    <string name="cannot_open">Kan het bestand niet openen</string>
 </resources>

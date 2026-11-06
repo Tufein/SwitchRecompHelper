@@ -15,6 +15,9 @@ kotlin {
 }
 
 dependencies {
+    // zstd (NCZ). compileOnly: the app supplies the Android (AAR) build with its native libs; tests use the JVM jar.
+    compileOnly("com.github.luben:zstd-jni:1.5.6-4")
+    testImplementation("com.github.luben:zstd-jni:1.5.6-4")
     testImplementation(kotlin("test"))
 }
 

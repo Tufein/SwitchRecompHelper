@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Switch Recomp Helper</string>
-    <string name="step_keys">1. Keys (prod.keys)</string>
-    <string name="step_xci">2. XCI dump</string>
-    <string name="step_out">3. Output folder</string>
+    <string name="step_keys">Keys (prod.keys)</string>
+    <string name="step_xci">Dump file</string>
+    <string name="step_out">Output folder</string>
     <string name="btn_pick_keys">Choose prod.keys</string>
-    <string name="btn_pick_xci">Choose XCI file</string>
+    <string name="btn_pick_xci">Choose XCI, NSP or NSZ</string>
     <string name="btn_pick_out">Choose output folder</string>
     <string name="cb_exefs">Extract ExeFS</string>
     <string name="cb_romfs">Extract RomFS</string>
@@ -22,7 +22,7 @@
     <string name="need_all">Choose keys, XCI and output folder first</string>
     <string name="need_part">Select ExeFS and/or RomFS</string>
     <string name="title_line">Title %1$s → %2$d ExeFS, %3$d RomFS files</string>
-    <string name="tagline">Extract XCI to ExeFS and RomFS</string>
+    <string name="tagline">Extract XCI, NSP and NSZ to ExeFS and RomFS</string>
     <string name="help">Help</string>
     <string name="options">What to extract?</string>
     <string name="details_show">Show details</string>
@@ -31,13 +31,13 @@
     <string name="onb_next">Next</string>
     <string name="onb_start">Get started</string>
     <string name="onb_1_title">Welcome to Switch Recomp Helper</string>
-    <string name="onb_1_body">This app extracts a dump of your own Switch cartridge into ExeFS and RomFS: the two parts you need for, for example, static recompilation.\n\nEverything happens on your phone; nothing is uploaded.</string>
+    <string name="onb_1_body">Extract a dump of your own Switch game into ExeFS and RomFS: the two parts you need for, for example, static recompilation.\n\nSupported: XCI (cartridge dump), NSP and NSZ (compressed NSP).\n\nEverything happens on your phone; nothing is uploaded.</string>
     <string name="onb_2_title">What do you need?</string>
-    <string name="onb_2_body">• An XCI dump of a cartridge you own.\n• Your own prod.keys, dumped from your own Switch (for example with Lockpick_RCM).\n\nThe app ships no keys or game files and does not share them.</string>
+    <string name="onb_2_body">• A dump of a game you own: an .xci, .nsp or .nsz file.\n• Your own prod.keys, dumped from your own Switch (for example with Lockpick_RCM).\n• For NSP and NSZ the app takes the title key from the tickets (.tik) inside the file. If there is none, add the title key as a line in your keys file (title.keys format).\n\nThe app ships no keys or game files.</string>
     <string name="onb_3_title">How it works</string>
-    <string name="onb_3_body">1. Choose your prod.keys. You only do this once: the app remembers them.\n2. Choose the XCI file.\n3. Choose the folder for the result.\n4. Switch ExeFS and/or RomFS on and tap Extract.</string>
+    <string name="onb_3_body">1. Choose your prod.keys. You only do this once: the app remembers them.\n2. Choose your dump (XCI, NSP or NSZ).\n3. Choose the folder for the result.\n4. Switch ExeFS and/or RomFS on and tap Extract.\n\nWhile extracting you see progress, speed and time left. Tap Cancel to stop.</string>
     <string name="onb_4_title">Result and tips</string>
-    <string name="onb_4_body">The files go into a new folder named after your dump + _extracted, split per title into exefs and romfs.\n\n• Make sure you have enough free space: RomFS is often several GB.\n• Keep the app open while extracting; the screen stays on.\n• Tap the question mark at the top right to see this guide again.</string>
+    <string name="onb_4_body">The files go into a new folder named after your dump + _extracted, split per title into exefs and romfs.\n\n• Make sure you have enough free space: RomFS is often several GB.\n• Keep the app open while extracting; the screen stays on.\n• An NSZ is compressed and takes a bit more processing time.\n• Updates and DLC (patches) are not supported: pick the base game.</string>
     <string name="speed_fmt">%1$s/s</string>
     <string name="eta_fmt">About %1$s left</string>
     <string name="eta_calculating">Estimating time left…</string>
@@ -45,4 +45,7 @@
     <string name="dur_ms">%1$d min %2$d s</string>
     <string name="dur_hm">%1$d h %2$d min</string>
     <string name="percent_fmt">%1$d%%</string>
+    <string name="onb_5_title">Something went wrong?</string>
+    <string name="onb_5_body">• \"header_key\" or \"NCA header could not be decrypted\": your prod.keys do not match this dump or are incomplete.\n• \"master_key_xx is missing\": your keys come from older firmware than the game needs. Dump new keys.\n• \"title key … not in your key file\": for an NSP/NSZ without a ticket, add the title key.\n• \"truncated\": the file was not copied completely.\n\nTap the question mark at the top right to see this guide again.</string>
+    <string name="cannot_open">Cannot open the file</string>
 </resources>

@@ -2,6 +2,7 @@ package com.tufein.switchrecomphelper.core.fs
 
 import com.tufein.switchrecomphelper.core.KeySet
 import com.tufein.switchrecomphelper.core.SwitchFormatException
+import com.tufein.switchrecomphelper.core.UnsupportedSectionException
 import com.tufein.switchrecomphelper.core.crypto.AesCtrSource
 import com.tufein.switchrecomphelper.core.crypto.AesUtil
 import com.tufein.switchrecomphelper.core.io.RandomAccessSource
@@ -27,8 +28,14 @@ class NcaSection(
 }
 
 /** Nintendo Content Archive. Header is decrypted on construction; section keys are derived lazily. */
-class Nca(private val source: RandomAccessSource, private val keys: KeySet) {
+class Nca(
+    private val source: RandomAccessSource,
+    private val keys: KeySet,
+    /** True for an NCZ (compressed NCA, as found in NSZ/XCZ): header + decrypted, zstd-compressed body. */
+    private val compressed: Boolean = false,
+) {
     val contentType: Int
+    val contentSize: Long
     val programId: Long
     val sections: List<NcaSection>
 
@@ -56,6 +63,7 @@ class Nca(private val source: RandomAccessSource, private val keys: KeySet) {
         contentType = hdr[0x205].toInt() and 0xFF
         keyGenOld = hdr[0x206].toInt() and 0xFF
         kaekIndex = hdr[0x207].toInt() and 0xFF
+        contentSize = bb.getLong(0x208)
         programId = bb.getLong(0x210)
         keyGen = hdr[0x220].toInt() and 0xFF
         rightsId = hdr.copyOfRange(0x230, 0x240)
@@ -102,8 +110,19 @@ class Nca(private val source: RandomAccessSource, private val keys: KeySet) {
         }
     }
 
+    /** NCZ only: the decrypted NCA body, starting at NCA offset 0x4000. Created on first use. */
+    private val plainBody: RandomAccessSource by lazy { Ncz.openBody(source, contentSize) }
+
     /** Whole section, decrypted. Offsets are relative to the section start. */
     fun openSection(s: NcaSection): RandomAccessSource {
+        if (s.encryptionType !in SUPPORTED_ENCRYPTION) {
+            throw UnsupportedSectionException("Section ${s.index} is a patch/BKTR section, which is not supported")
+        }
+        if (compressed) {
+            // NCZ stores sections already decrypted; no section key is needed.
+            if (s.start < Ncz.HEADER_SIZE) throw SwitchFormatException("NCZ section ${s.index} starts inside the header")
+            return plainBody.slice(s.start - Ncz.HEADER_SIZE, s.size)
+        }
         val raw = source.slice(s.start, s.size)
         return when (s.encryptionType) {
             1 -> raw
@@ -111,7 +130,7 @@ class Nca(private val source: RandomAccessSource, private val keys: KeySet) {
                 val upper = s.fsHeader.copyOfRange(0x140, 0x148).reversedArray()
                 AesCtrSource(raw, ctrKey, upper, s.start)
             }
-            else -> throw SwitchFormatException("Unsupported section encryption type ${s.encryptionType} (patch/BKTR sections are not supported)")
+            else -> throw UnsupportedSectionException("Unsupported section encryption type ${s.encryptionType}")
         }
     }
 
@@ -143,5 +162,6 @@ class Nca(private val source: RandomAccessSource, private val keys: KeySet) {
     companion object {
         const val HEADER_SIZE = 0xC00
         const val TYPE_PROGRAM = 0
+        private val SUPPORTED_ENCRYPTION = setOf(0, 1, 3)
     }
 }
