@@ -11,7 +11,6 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
       - run: ./gradlew :core:test :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
