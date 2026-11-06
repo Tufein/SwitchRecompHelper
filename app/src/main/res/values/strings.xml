@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Switch Recomp Helper</string>
+    <string name="intro">Pakt een XCI-dump van je eigen Switch-cartridge uit naar ExeFS en RomFS. De app bevat geen sleutels of spelbestanden: je hebt je eigen prod.keys nodig.</string>
+    <string name="step_keys">1. Sleutels (prod.keys)</string>
+    <string name="step_xci">2. XCI-dump</string>
+    <string name="step_out">3. Uitvoermap</string>
+    <string name="btn_pick_keys">Kies prod.keys</string>
+    <string name="btn_pick_xci">Kies XCI-bestand</string>
+    <string name="btn_pick_out">Kies uitvoermap</string>
+    <string name="cb_exefs">ExeFS uitpakken</string>
+    <string name="cb_romfs">RomFS uitpakken</string>
+    <string name="btn_start">Uitpakken</string>
+    <string name="btn_cancel">Annuleren</string>
+    <string name="keys_none">Nog geen sleutels geladen</string>
+    <string name="keys_loaded">Sleutels geladen (%1$d sleutels)</string>
+    <string name="keys_invalid">Dit bestand bevat geen header_key; kies een geldig prod.keys</string>
+    <string name="keys_error">Sleutels laden mislukt: %1$s</string>
+    <string name="none_selected">Niets gekozen</string>
+    <string name="running">Bezig…</string>
+    <string name="done">Klaar: %1$d bestanden (%2$s) uitgepakt</string>
+    <string name="cancelled">Geannuleerd</string>
+    <string name="failed">Mislukt: %1$s</string>
+    <string name="need_all">Kies eerst sleutels, XCI en uitvoermap</string>
+    <string name="need_part">Kies ExeFS en/of RomFS</string>
+    <string name="title_line">Titel %1$s → %2$d ExeFS-, %3$d RomFS-bestanden</string>
+</resources>

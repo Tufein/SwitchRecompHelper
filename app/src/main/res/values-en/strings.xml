@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Switch Recomp Helper</string>
+    <string name="intro">Extracts ExeFS and RomFS from an XCI dump of your own Switch cartridge. The app ships no keys or game files: you need your own prod.keys.</string>
+    <string name="step_keys">1. Keys (prod.keys)</string>
+    <string name="step_xci">2. XCI dump</string>
+    <string name="step_out">3. Output folder</string>
+    <string name="btn_pick_keys">Choose prod.keys</string>
+    <string name="btn_pick_xci">Choose XCI file</string>
+    <string name="btn_pick_out">Choose output folder</string>
+    <string name="cb_exefs">Extract ExeFS</string>
+    <string name="cb_romfs">Extract RomFS</string>
+    <string name="btn_start">Extract</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="keys_none">No keys loaded yet</string>
+    <string name="keys_loaded">Keys loaded (%1$d keys)</string>
+    <string name="keys_invalid">This file has no header_key; choose a valid prod.keys</string>
+    <string name="keys_error">Failed to load keys: %1$s</string>
+    <string name="none_selected">Nothing selected</string>
+    <string name="running">Working…</string>
+    <string name="done">Done: %1$d files (%2$s) extracted</string>
+    <string name="cancelled">Cancelled</string>
+    <string name="failed">Failed: %1$s</string>
+    <string name="need_all">Choose keys, XCI and output folder first</string>
+    <string name="need_part">Select ExeFS and/or RomFS</string>
+    <string name="title_line">Title %1$s → %2$d ExeFS, %3$d RomFS files</string>
+</resources>
