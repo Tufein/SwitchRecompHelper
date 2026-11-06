@@ -16,10 +16,11 @@ class TestImage(seed: Long = 1) {
     val masterKey = ByteArray(16).also(rnd::nextBytes)
     val kaekApp = ByteArray(16).also(rnd::nextBytes)
     private val ctrKey = ByteArray(16).also(rnd::nextBytes)
+    private val titlekek = ByteArray(16).also(rnd::nextBytes)
 
     val keyText: String
         get() = "header_key = ${headerKey.toHex()}\nmaster_key_00 = ${masterKey.toHex()}\n" +
-            "; comment\nkey_area_key_application_00 = ${kaekApp.toHex()}\n"
+            "; comment\nkey_area_key_application_00 = ${kaekApp.toHex()}\ntitlekek_00 = ${titlekek.toHex()}\n"
 
     val exefsFiles = linkedMapOf(
         "main" to ByteArray(5000).also(rnd::nextBytes),
@@ -122,7 +123,35 @@ class TestImage(seed: Long = 1) {
         return c.doFinal(data)
     }
 
-    fun nca(type: Int, sections: List<Triple<Int, ByteArray, Int>>, titleId: Long = programId): ByteArray {
+    class Built(val nca: ByteArray, /** decrypted bytes of the NCA from offset 0x4000 (only meaningful if firstSectionAt == 0x4000) */ val plainBody: ByteArray)
+
+    fun nca(type: Int, sections: List<Triple<Int, ByteArray, Int>>, titleId: Long = programId): ByteArray =
+        build(type, sections, titleId).nca
+
+    /** Rights id used for title-key crypto builds. */
+    val rightsId = ByteArray(16) { (0xA0 + it).toByte() }
+
+    /** Encrypted title key as it appears in a ticket (titlekek-encrypted section key). */
+    private val encTitleKey: ByteArray get() = AesUtil.ecbEncrypt(titlekek, ctrKey)
+
+    fun ticket(): ByteArray {
+        val t = ByteArray(0x2C0)
+        ByteBuffer.wrap(t).order(ByteOrder.LITTLE_ENDIAN).putInt(0, 0x10004)
+        val body = 0x140
+        encTitleKey.copyInto(t, body + 0x40)
+        t[body + 0x141] = 0
+        rightsId.copyInto(t, body + 0x160)
+        return t
+    }
+
+    /** [useTitleKey]: set a rights id so the section key comes from a ticket/title.keys instead of the key area. */
+    fun build(
+        type: Int,
+        sections: List<Triple<Int, ByteArray, Int>>,
+        titleId: Long = programId,
+        firstSectionAt: Long = 0xC00,
+        useTitleKey: Boolean = false,
+    ): Built {
         // sections: (fsType, payload, encryptionType)
         val hdr = ByteArray(0xC00)
         "NCA3".toByteArray().copyInto(hdr, 0x200)
@@ -130,8 +159,11 @@ class TestImage(seed: Long = 1) {
         ByteBuffer.wrap(hdr).order(ByteOrder.LITTLE_ENDIAN).putLong(0x210, titleId)
         val keyArea = ByteArray(0x40).also { ctrKey.copyInto(it, 0x20) }
         AesUtil.ecbEncrypt(kaekApp, keyArea).copyInto(hdr, 0x300)
-        var pos = 0xC00L
+        if (useTitleKey) rightsId.copyInto(hdr, 0x230)
+        var pos = firstSectionAt
         val body = ByteArrayOutputStream()
+        body.write(ByteArray((firstSectionAt - 0xC00).toInt()))
+        val plainOut = ByteArrayOutputStream()
         sections.forEachIndexed { i, (fsType, payload, enc) ->
             val upper = ByteArray(8) { (i * 8 + it + 1).toByte() }
             // Layout inside section: hash region (0x200 zeros), then payload at 0x200 (PFS0) / 0x4000 (IVFC).
@@ -156,10 +188,49 @@ class TestImage(seed: Long = 1) {
             val bb = ByteBuffer.wrap(hdr).order(ByteOrder.LITTLE_ENDIAN)
             bb.putInt(0x240 + i * 0x10, (pos / 0x200).toInt()); bb.putInt(0x244 + i * 0x10, ((pos + plain.size) / 0x200).toInt())
             body.write(enc2)
+            plainOut.write(plain)
             pos += plain.size
         }
-        return AesUtil.xtsEncrypt(headerKey, hdr, 0) + body.toByteArray()
+        ByteBuffer.wrap(hdr).order(ByteOrder.LITTLE_ENDIAN).putLong(0x208, pos)
+        return Built(AesUtil.xtsEncrypt(headerKey, hdr, 0) + body.toByteArray(), plainOut.toByteArray())
     }
+
+    /**
+     * NCZ from an NCA built with firstSectionAt = 0x4000: raw 0x4000-byte header, NCZSECTN table, then the
+     * decrypted body as one zstd stream ([blockExponent] null) or independent blocks (NCZBLOCK).
+     */
+    fun ncz(b: Built, blockExponent: Int? = null): ByteArray {
+        val out = ByteArrayOutputStream()
+        out.write(b.nca, 0, 0x4000)
+        out.write(le(0x10) { put("NCZSECTN".toByteArray()); putLong(1) })
+        out.write(le(0x40) { putLong(0x4000); putLong(b.plainBody.size.toLong()); putLong(3); putLong(0) })
+        if (blockExponent == null) {
+            out.write(com.github.luben.zstd.Zstd.compress(b.plainBody, 3))
+        } else {
+            val bs = 1 shl blockExponent
+            val blocks = (b.plainBody.size + bs - 1) / bs
+            val comps = (0 until blocks).map { i ->
+                val raw = b.plainBody.copyOfRange(i * bs, minOf(b.plainBody.size, (i + 1) * bs))
+                val c = com.github.luben.zstd.Zstd.compress(raw, 3)
+                if (c.size >= raw.size) raw else c
+            }
+            out.write(le(0x18) { put("NCZBLOCK".toByteArray()); put(2); put(1); put(0); put(blockExponent.toByte()); putInt(blocks); putLong(b.plainBody.size.toLong()) })
+            comps.forEach { out.write(le(4) { putInt(it.size) }) }
+            comps.forEach { out.write(it) }
+        }
+        return out.toByteArray()
+    }
+
+    /** Programs for NSP/NSZ tests: sections at 0x4000 like real NCAs. */
+    fun programBuilt(useTitleKey: Boolean = false, exefsIn: Map<String, ByteArray> = exefsFiles, romfsIn: Map<String, ByteArray> = romfsFiles): Built =
+        build(
+            0,
+            listOf(Triple(1, pfs0(exefsIn), 3), Triple(0, romfs(romfsIn), 3), Triple(1, pfs0(mapOf("NintendoLogo.png" to ByteArray(10))), 3)),
+            firstSectionAt = 0x4000,
+            useTitleKey = useTitleKey,
+        )
+
+    fun nsp(entries: Map<String, ByteArray>): ByteArray = pfs0(entries, hfs = false)
 
     fun xci(ncas: Map<String, ByteArray>, prefix: Int = 0): ByteArray {
         val secure = pfs0(ncas, hfs = true)

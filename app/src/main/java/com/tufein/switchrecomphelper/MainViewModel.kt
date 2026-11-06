@@ -165,7 +165,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             try {
                 val folder = (s.xciName ?: "xci").substringBeforeLast('.').replace(Regex("[^A-Za-z0-9._ -]"), "_") + "_extracted"
-                val pfd = resolver.openFileDescriptor(xci, "r") ?: throw SwitchFormatException("Cannot open the XCI file")
+                val pfd = resolver.openFileDescriptor(xci, "r") ?: throw SwitchFormatException(getString(R.string.cannot_open))
                 pfd.use {
                     val stream = FileInputStream(it.fileDescriptor)
                     FileChannelSource(stream.channel, stream).use { source ->

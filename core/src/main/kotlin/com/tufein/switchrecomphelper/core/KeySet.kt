@@ -43,6 +43,9 @@ class KeySet private constructor(private val keys: Map<String, ByteArray>) {
     /** Encrypted title key for a 16-byte rights id, from title.keys. */
     fun titleKey(rightsId: ByteArray): ByteArray? = keys[rightsId.toHex()]?.takeIf { it.size == 16 }
 
+    /** A copy of this key set with extra (encrypted) title keys, keyed by lowercase rights-id hex, e.g. from tickets in an NSP. */
+    fun withTitleKeys(extra: Map<String, ByteArray>): KeySet = KeySet(keys + extra)
+
     companion object {
         private val KAEK_NAMES = listOf("application", "ocean", "system")
 

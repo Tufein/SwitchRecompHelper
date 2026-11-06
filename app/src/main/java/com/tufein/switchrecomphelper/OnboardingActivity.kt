@@ -27,6 +27,7 @@ class OnboardingActivity : AppCompatActivity() {
         Page(R.drawable.ic_key, R.string.onb_2_title, R.string.onb_2_body),
         Page(R.drawable.ic_steps, R.string.onb_3_title, R.string.onb_3_body),
         Page(R.drawable.ic_folder, R.string.onb_4_title, R.string.onb_4_body),
+        Page(R.drawable.ic_help, R.string.onb_5_title, R.string.onb_5_body),
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
