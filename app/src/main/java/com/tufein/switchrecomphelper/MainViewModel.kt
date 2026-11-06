@@ -30,7 +30,11 @@ data class UiState(
     val outName: String? = null,
     val running: Boolean = false,
     val progress: Int = 0, // 0..1000
+    val speedBytesPerSec: Long = 0,
+    val etaSeconds: Long = -1, // -1 = unknown yet
+    val currentFile: String = "",
     val message: String = "",
+    val isError: Boolean = false,
     val log: String = "",
 )
 
@@ -43,6 +47,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var job: Job? = null
 
     @Volatile private var cancelRequested = false
+    @Volatile private var pendingFile = ""
 
     init {
         // Keys imported earlier are kept in app-private storage.
@@ -61,20 +66,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val resolver = getApplication<Application>().contentResolver
                 val text = resolver.openInputStream(uri)?.use { input ->
-                    val bytes = input.readNBytes(MAX_KEYS_BYTES + 1)
-                    if (bytes.size > MAX_KEYS_BYTES) throw SwitchFormatException("File too large for a key file")
-                    String(bytes, Charsets.UTF_8)
+                    // InputStream.readNBytes(int) needs API 33; read with an explicit limit instead.
+                    val out = java.io.ByteArrayOutputStream()
+                    val chunk = ByteArray(64 * 1024)
+                    while (true) {
+                        val n = input.read(chunk)
+                        if (n < 0) break
+                        out.write(chunk, 0, n)
+                        if (out.size() > MAX_KEYS_BYTES) throw SwitchFormatException("File too large for a key file")
+                    }
+                    String(out.toByteArray(), Charsets.UTF_8)
                 } ?: throw SwitchFormatException("Cannot open file")
                 val parsed = KeySet.parse(text)
                 if (!parsed.hasHeaderKey) {
-                    _state.update { it.copy(message = getString(R.string.keys_invalid)) }
+                    _state.update { it.copy(message = getString(R.string.keys_invalid), isError = true) }
                     return@launch
                 }
                 keysFile.writeText(text)
                 keys = parsed
-                _state.update { it.copy(keysText = getString(R.string.keys_loaded, parsed.size), message = "") }
+                _state.update { it.copy(keysText = getString(R.string.keys_loaded, parsed.size), message = "", isError = false) }
             } catch (e: Exception) {
-                _state.update { it.copy(message = getString(R.string.keys_error, e.message ?: e.javaClass.simpleName)) }
+                _state.update { it.copy(message = getString(R.string.keys_error, e.message ?: e.javaClass.simpleName), isError = true) }
             }
         }
     }
@@ -102,33 +114,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val xci = s.xciUri
         val out = s.outUri
         if (k == null || xci == null || out == null) {
-            _state.update { it.copy(message = getString(R.string.need_all)) }
+            _state.update { it.copy(message = getString(R.string.need_all), isError = true) }
             return
         }
         if (!exeFs && !romFs) {
-            _state.update { it.copy(message = getString(R.string.need_part)) }
+            _state.update { it.copy(message = getString(R.string.need_part), isError = true) }
             return
         }
         if (s.running) return
         cancelRequested = false
-        _state.update { it.copy(running = true, progress = 0, message = getString(R.string.running), log = "") }
+        _state.update {
+            it.copy(running = true, progress = 0, speedBytesPerSec = 0, etaSeconds = -1, currentFile = "", isError = false, message = "", log = "")
+        }
 
         job = viewModelScope.launch(Dispatchers.IO) {
             val app = getApplication<Application>()
             val resolver = app.contentResolver
+            val startNanos = System.nanoTime()
             var lastUi = 0L
+            var lastBytes = 0L
+            var smoothed = 0.0
+            val logBuf = StringBuilder()
             val listener = object : ProgressListener {
                 override val cancelled: Boolean get() = cancelRequested
+
                 override fun status(message: String) {
-                    _state.update { it.copy(message = message, log = (it.log + message + "\n").takeLast(MAX_LOG_CHARS)) }
+                    // Called once per file (thousands for RomFS): only append here, publish on the progress tick.
+                    logBuf.append(message).append('\n')
+                    if (logBuf.length > MAX_LOG_CHARS) logBuf.delete(0, logBuf.length - MAX_LOG_CHARS)
+                    pendingFile = message
                 }
 
                 override fun progress(doneBytes: Long, totalBytes: Long) {
                     val now = System.nanoTime()
-                    if (now - lastUi < 100_000_000L && doneBytes != totalBytes) return
+                    if (now - lastUi < UI_INTERVAL_NANOS && doneBytes != totalBytes) return
+                    val dt = (now - maxOf(lastUi, startNanos)) / 1e9
+                    if (dt > 0) {
+                        val instant = (doneBytes - lastBytes) / dt
+                        smoothed = if (smoothed == 0.0) instant else 0.7 * smoothed + 0.3 * instant
+                    }
                     lastUi = now
+                    lastBytes = doneBytes
                     val p = if (totalBytes > 0) (doneBytes * 1000 / totalBytes).toInt() else 0
-                    _state.update { it.copy(progress = p) }
+                    val eta = if (smoothed > 1.0 && totalBytes > doneBytes) ((totalBytes - doneBytes) / smoothed).toLong() else -1L
+                    val log = logBuf.toString()
+                    _state.update {
+                        it.copy(progress = p, speedBytesPerSec = smoothed.toLong(), etaSeconds = eta, currentFile = pendingFile, log = log)
+                    }
                 }
             }
             try {
@@ -144,17 +176,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         _state.update { st ->
                             st.copy(
-                                running = false, progress = 1000,
+                                running = false, progress = 1000, isError = false, currentFile = "",
                                 message = getString(R.string.done, result.totalFiles, Formatter.formatFileSize(app, result.totalBytes)),
-                                log = st.log + titleLines + "\n",
+                                log = logBuf.toString() + titleLines + "\n",
                             )
                         }
                     }
                 }
             } catch (e: ExtractionCancelledException) {
-                _state.update { it.copy(running = false, message = getString(R.string.cancelled)) }
+                _state.update { it.copy(running = false, isError = false, currentFile = "", message = getString(R.string.cancelled), log = logBuf.toString()) }
             } catch (e: Exception) {
-                _state.update { it.copy(running = false, message = getString(R.string.failed, e.message ?: e.javaClass.simpleName)) }
+                _state.update {
+                    it.copy(
+                        running = false, isError = true, currentFile = "",
+                        message = getString(R.string.failed, e.message ?: e.javaClass.simpleName), log = logBuf.toString(),
+                    )
+                }
             }
         }
     }
@@ -162,5 +199,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         const val MAX_KEYS_BYTES = 4 * 1024 * 1024
         const val MAX_LOG_CHARS = 20_000
+        const val UI_INTERVAL_NANOS = 250_000_000L
     }
 }

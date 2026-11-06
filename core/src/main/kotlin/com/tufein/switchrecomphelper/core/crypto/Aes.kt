@@ -99,9 +99,15 @@ class AesCtrSource(
         val n = minOf(length.toLong(), size - position).toInt()
         val alignedStart = position and 15L.inv()
         val head = (position - alignedStart).toInt()
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, IvParameterSpec(AesUtil.ncaCounter(upperIv, counterBase + alignedStart)))
+        if (head == 0) {
+            // Fast path (bulk sequential reads): read straight into the caller's buffer and decrypt in place.
+            inner.readFully(position, dst, offset, n)
+            cipher.doFinal(dst, offset, n, dst, offset)
+            return n
+        }
         val buf = ByteArray(head + n)
         inner.readFully(alignedStart, buf)
-        cipher.init(Cipher.DECRYPT_MODE, keySpec, IvParameterSpec(AesUtil.ncaCounter(upperIv, counterBase + alignedStart)))
         val plain = cipher.doFinal(buf)
         System.arraycopy(plain, head, dst, offset, n)
         return n
