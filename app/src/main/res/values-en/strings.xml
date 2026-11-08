@@ -7,11 +7,11 @@
     <string name="btn_pick_keys">Choose prod.keys</string>
     <string name="btn_pick_xci">Choose XCI, NSP or NSZ</string>
     <string name="btn_pick_out">Choose output folder</string>
-    <string name="cb_exefs">Extract ExeFS</string>
-    <string name="cb_romfs">Extract RomFS</string>
+    <string name="cb_exefs">Extract ExeFS (code)</string>
+    <string name="cb_romfs">Extract RomFS (game data)</string>
     <string name="btn_start">Extract</string>
     <string name="btn_cancel">Cancel</string>
-    <string name="keys_none">No keys loaded yet</string>
+    <string name="keys_none">No keys yet: choose the prod.keys from your own Switch</string>
     <string name="keys_loaded">Keys loaded (%1$d keys)</string>
     <string name="keys_invalid">This file has no header_key; choose a valid prod.keys</string>
     <string name="keys_error">Failed to load keys: %1$s</string>
@@ -30,14 +30,12 @@
     <string name="onb_skip">Skip</string>
     <string name="onb_next">Next</string>
     <string name="onb_start">Get started</string>
-    <string name="onb_1_title">Welcome to Switch Recomp Helper</string>
-    <string name="onb_1_body">Extract a dump of your own Switch game into ExeFS and RomFS: the two parts you need for, for example, static recompilation.\n\nSupported: XCI (cartridge dump), NSP and NSZ (compressed NSP).\n\nEverything happens on your phone; nothing is uploaded.</string>
     <string name="onb_2_title">What do you need?</string>
     <string name="onb_2_body">• A dump of a game you own: an .xci, .nsp or .nsz file.\n• Your own prod.keys, dumped from your own Switch (for example with Lockpick_RCM).\n• For NSP and NSZ the app takes the title key from the tickets (.tik) inside the file. If there is none, add the title key as a line in your keys file (title.keys format).\n\nThe app ships no keys or game files.</string>
     <string name="onb_3_title">How it works</string>
     <string name="onb_3_body">1. Choose your prod.keys. You only do this once: the app remembers them.\n2. Choose your dump (XCI, NSP or NSZ).\n3. Choose the folder for the result.\n4. Switch ExeFS and/or RomFS on and tap Extract.\n\nWhile extracting you see progress, speed and time left. Tap Cancel to stop.</string>
     <string name="onb_4_title">Result and tips</string>
-    <string name="onb_4_body">The files go into a new folder named after your dump + _extracted, split per title into exefs and romfs.\n\n• Make sure you have enough free space: RomFS is often several GB.\n• Keep the app open while extracting; the screen stays on.\n• An NSZ is compressed and takes a bit more processing time.\n• Updates and DLC (patches) are not supported: pick the base game.</string>
+    <string name="onb_4_body">The files go into a new folder named after your dump + _extracted:\n\nMyGame_extracted/\n    0100…/exefs/   main, main.npdm, …\n    0100…/romfs/   the game data\n\nThe 0100… folder is the game’s title ID. Copy that folder to your PC or recomp project afterwards.\n\n• Make sure you have enough free space: RomFS is often several GB.\n• Keep the app open while extracting; the screen stays on.\n• An NSZ is compressed and takes a bit more processing time.\n• Updates and DLC (patches) are not supported: pick the base game.</string>
     <string name="speed_fmt">%1$s/s</string>
     <string name="eta_fmt">About %1$s left</string>
     <string name="eta_calculating">Estimating time left…</string>
@@ -48,4 +46,13 @@
     <string name="onb_5_title">Something went wrong?</string>
     <string name="onb_5_body">• \"header_key\" or \"NCA header could not be decrypted\": your prod.keys do not match this dump or are incomplete.\n• \"master_key_xx is missing\": your keys come from older firmware than the game needs. Dump new keys.\n• \"title key … not in your key file\": for an NSP/NSZ without a ticket, add the title key.\n• \"truncated\": the file was not copied completely.\n\nTap the question mark at the top right to see this guide again.</string>
     <string name="cannot_open">Cannot open the file</string>
+    <string name="onb_what_title">What does this app do?</string>
+    <string name="onb_what_body">A Switch game (XCI, NSP or NSZ) is one big encrypted package. A recomp tool cannot use it as is.\n\nThis app opens that package with the keys from your own Switch and unpacks it into ordinary folders and files: ExeFS (the game’s code) and RomFS (the game data).\n\nThat is the first step of a recomp. Static recompilation translates a game’s code into a program that runs on another device without an emulator, and these are exactly the files it needs.\n\nEverything happens on your phone; nothing is uploaded.</string>
+    <string name="onb_flow_dump">Your dump</string>
+    <string name="onb_flow_keys">Decrypt</string>
+    <string name="onb_flow_out">ExeFS + RomFS</string>
+    <string name="onb_flow_desc">Your dump is decrypted with your keys and unpacked into ExeFS and RomFS</string>
+    <string name="onb_parts_title">ExeFS and RomFS</string>
+    <string name="onb_parts_body">ExeFS: the code\n• main: the game program itself. This is what a recompiler translates.\n• main.npdm: information about the program (including the title ID and permissions).\n• rtld, sdk, subsdk…: libraries the game ships with.\nThese files stay in the NSO format used on the Switch; the app does not unpack them further.\n\nRomFS: the game data\n• Images, models, sound, music, levels and text.\n• Often thousands of files and several GB.\n\nOnly need the code? Switch RomFS off: it saves a lot of time and space.</string>
+    <string name="options_hint">ExeFS is the game’s code (needed for a recomp). RomFS is the game data such as images and sound, often several GB.</string>
 </resources>

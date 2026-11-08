@@ -9,6 +9,13 @@ Android-app die een XCI-dump van je **eigen** Switch-cartridge uitpakt naar **Ex
 3. Kies de `.xci`-dump en een uitvoermap (Storage Access Framework, geen opslagrechten nodig).
 4. Uitpakken. Resultaat: `<naam>_extracted/<programId>/exefs/…` en `…/romfs/…`.
 
+## Nieuw in 0.4.0
+- Onboarding begint nu met **wat de app doet** (met een schema: dump → ontsleutelen → ExeFS + RomFS) en een pagina die uitlegt wat ExeFS en RomFS zijn en wat je ervan nodig hebt voor een recomp. Bestaande gebruikers zien de uitleg na de update één keer opnieuw.
+- Korte uitleg bij de keuze ExeFS/RomFS op het hoofdscherm.
+- Sneller bij veel kleine bestanden (RomFS): uitvoerbestanden worden met 4 tegelijk aangemaakt, sluiten gebeurt op de schrijfthread en het lezen van het volgende bestand wacht niet meer op het vorige. In een simulatie met trage bestandsaanmaak (3 ms aanmaken, 1 ms sluiten, 600 bestanden) ging dat van 1,9 s naar 0,7 s.
+- Minder geheugengebruik per bestand (geen extra buffer van 1 MB per uitvoerbestand) en een lichtere UI tijdens het uitpakken (het logboek wordt alleen opgemaakt als het zichtbaar is).
+- Sleutels worden bij het opstarten op de achtergrond geladen.
+
 ## Nieuw in 0.3.0
 - **NSP en NSZ** (en XCZ) worden nu ook uitgepakt, naast XCI. Het type wordt aan de inhoud herkend, niet aan de extensie.
 - NSP/NSZ: de titelsleutel komt uit de tickets (`.tik`) in het bestand, of uit `title.keys`-regels in je keys-bestand.

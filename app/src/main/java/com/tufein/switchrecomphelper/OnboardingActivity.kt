@@ -20,10 +20,12 @@ import com.tufein.switchrecomphelper.databinding.ActivityOnboardingBinding
 
 /** Short how-it-works guide: shown on first launch and again from the help button. */
 class OnboardingActivity : AppCompatActivity() {
-    private class Page(@DrawableRes val image: Int, @StringRes val title: Int, @StringRes val body: Int)
+    private class Page(@DrawableRes val image: Int, @StringRes val title: Int, @StringRes val body: Int, val flow: Boolean = false)
 
     private val pages = listOf(
-        Page(R.drawable.ic_cartridge, R.string.onb_1_title, R.string.onb_1_body),
+        // First: what the app does and why, before any of the how.
+        Page(R.drawable.ic_cartridge, R.string.onb_what_title, R.string.onb_what_body, flow = true),
+        Page(R.drawable.ic_code, R.string.onb_parts_title, R.string.onb_parts_body),
         Page(R.drawable.ic_key, R.string.onb_2_title, R.string.onb_2_body),
         Page(R.drawable.ic_steps, R.string.onb_3_title, R.string.onb_3_body),
         Page(R.drawable.ic_folder, R.string.onb_4_title, R.string.onb_4_body),
@@ -51,6 +53,8 @@ class OnboardingActivity : AppCompatActivity() {
                 holder.itemView.findViewById<ImageView>(R.id.image).setImageResource(p.image)
                 holder.itemView.findViewById<TextView>(R.id.title).setText(p.title)
                 holder.itemView.findViewById<TextView>(R.id.body).setText(p.body)
+                holder.itemView.findViewById<android.view.View>(R.id.flow).visibility =
+                    if (p.flow) android.view.View.VISIBLE else android.view.View.GONE
             }
         }
         TabLayoutMediator(b.dots, b.pager) { _, _ -> }.attach()
@@ -78,9 +82,12 @@ class OnboardingActivity : AppCompatActivity() {
 
     companion object {
         private const val PREFS = "app"
-        private const val KEY_SEEN = "onboarding_seen"
+        private const val KEY_VERSION = "onboarding_version"
 
-        fun seen(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_SEEN, false)
-        fun markSeen(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean(KEY_SEEN, true) }
+        /** Bump when the guide gets content every user should see once more (also shown again after an update). */
+        private const val VERSION = 2
+
+        fun seen(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_VERSION, 0) >= VERSION
+        fun markSeen(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putInt(KEY_VERSION, VERSION) }
     }
 }

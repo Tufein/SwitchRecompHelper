@@ -18,6 +18,22 @@ class MemorySink : OutputSink {
     fun bytes(path: String) = files[path]?.toByteArray() ?: error("missing $path; have ${files.keys}")
 }
 
+/** Thread-safe sink that creates files in parallel (like SafSink) and records which streams were closed. */
+class ParallelSink(private val delayMs: Long = 1) : OutputSink {
+    override val parallelCreates = 4
+    val files = java.util.concurrent.ConcurrentHashMap<String, ByteArrayOutputStream>()
+    val closed: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    override fun create(relativePath: String): OutputStream {
+        Thread.sleep(delayMs)
+        val b = ByteArrayOutputStream().also { files[relativePath] = it }
+        return object : OutputStream() {
+            override fun write(x: Int) = b.write(x)
+            override fun write(x: ByteArray, o: Int, l: Int) = b.write(x, o, l)
+            override fun close() { closed.add(relativePath) }
+        }
+    }
+}
+
 class ExtractorTest {
     private val img = TestImage()
     private val keys = KeySet.parse(img.keyText)
@@ -188,5 +204,40 @@ class ExtractorTest {
             section.slice(file.offset, file.size).readFully(off.toLong(), buf)
             assertContentEquals(payload.copyOfRange(off, off + len), buf, "off=$off len=$len")
         }
+    }
+
+    private fun manyFiles(count: Int): Pair<TestImage, Map<String, ByteArray>> {
+        val many = TestImage(7)
+        val rnd = java.util.Random(11)
+        return many to (0 until count).associate { "d${it % 7}/f$it.bin" to ByteArray(rnd.nextInt(5000)).also(rnd::nextBytes) }
+    }
+
+    @Test
+    fun parallelCreatesWriteEveryFileCorrectly() {
+        val (many, files) = manyFiles(300)
+        val xci = many.xci(mapOf("p.nca" to many.nca(0, listOf(Triple(0, many.romfs(files), 3)))))
+        val sink = ParallelSink()
+        val result = SwitchExtractor(KeySet.parse(many.keyText)).extract(ByteArraySource(xci), sink)
+        assertEquals(files.size, result.totalFiles)
+        val id = "%016x".format(many.programId)
+        for ((name, data) in files) assertContentEquals(data, sink.files["$id/romfs/$name"]?.toByteArray(), name)
+        assertEquals(sink.files.keys, sink.closed)
+    }
+
+    @Test
+    fun cancelHalfwayClosesEveryOpenedStream() {
+        val (many, files) = manyFiles(200)
+        val xci = many.xci(mapOf("p.nca" to many.nca(0, listOf(Triple(0, many.romfs(files), 3)))))
+        val sink = ParallelSink()
+        var seen = 0
+        val l = object : ProgressListener {
+            override fun status(message: String) { seen++ }
+            override val cancelled get() = seen > 60
+        }
+        assertFailsWith<ExtractionCancelledException> {
+            SwitchExtractor(KeySet.parse(many.keyText)).extract(ByteArraySource(xci), sink, listener = l)
+        }
+        assertTrue(sink.files.size < files.size)
+        assertEquals(sink.files.keys, sink.closed)
     }
 }

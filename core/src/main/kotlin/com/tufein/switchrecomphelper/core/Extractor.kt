@@ -14,12 +14,19 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /** Where extracted files go. Paths are relative, '/'-separated and already validated. */
 interface OutputSink {
     fun create(relativePath: String): OutputStream
+
+    /**
+     * How many [create] calls may run at the same time. Keep 1 unless [create] is thread-safe;
+     * a higher value lets slow file creation (Android's SAF) overlap.
+     */
+    val parallelCreates: Int get() = 1
 }
 
 interface ProgressListener {
@@ -114,28 +121,14 @@ class SwitchExtractor(private val keys: KeySet) {
         planned.sortWith(compareBy<Planned>({ it.group }, { it.sectionStart }, { it.offset }))
 
         val total = planned.sumOf { it.data.size }
-        var done = 0L
         listener.progress(0, total)
-        Copier().use { copier ->
-            // Opening the next output file (slow on Android's SAF) overlaps with copying the current one.
-            var next: CompletableFuture<OutputStream>? = planned.firstOrNull()?.let { openAsync(copier.opener, sink, it.path) }
-            try {
-                for ((i, p) in planned.withIndex()) {
-                    listener.status("(${i + 1}/${planned.size}) ${p.path}")
-                    val current = next!!
-                    next = planned.getOrNull(i + 1)?.let { openAsync(copier.opener, sink, it.path) }
-                    val base = done
-                    await(current).use { out ->
-                        copier.copy(p.data, out, { listener.cancelled }) { written -> listener.progress(base + written, total) }
-                    }
-                    done += p.data.size
-                    listener.progress(done, total)
-                }
-                next = null
-            } finally {
-                // On failure/cancel: don't leak the stream opened ahead of time.
-                next?.let { f -> runCatching { await(f).close() } }
-            }
+        Pipeline(sink, planned.map { it.path }).use { pipeline ->
+            pipeline.run(
+                sources = planned.map { it.data },
+                cancelled = { listener.cancelled },
+                onFile = { i -> listener.status("(${i + 1}/${planned.size}) ${planned[i].path}") },
+                onProgress = { written -> listener.progress(written, total) },
+            )
         }
         return ExtractionResult(titles, planned.size, total)
     }
@@ -164,84 +157,140 @@ class SwitchExtractor(private val keys: KeySet) {
         return if (extra.isEmpty()) keys else keys.withTitleKeys(extra)
     }
 
-    /** Unwraps the real error (e.g. IOException) from a failed background open. */
-    private fun await(f: CompletableFuture<OutputStream>): OutputStream =
-        try {
-            f.get()
-        } catch (e: java.util.concurrent.ExecutionException) {
-            throw e.cause ?: e
-        }
-
-    private fun openAsync(executor: ExecutorService, sink: OutputSink, path: String): CompletableFuture<OutputStream> =
-        CompletableFuture.supplyAsync({ sink.create(path) }, executor)
-
     /**
-     * Copies a source to a stream with reading/decrypting and writing on separate threads, so slow storage
-     * (SAF writes) and AES work overlap instead of alternating.
+     * Copies every planned file through one pipeline that spans file boundaries:
+     * - the calling thread reads (decrypts, decompresses) in on-disk order,
+     * - a writer thread writes and closes the output files,
+     * - opener threads create the output files ahead of time.
+     * Creating and closing a file is the slow part on Android's SAF, and a RomFS often has thousands of small
+     * files, so reading the next file no longer waits until the previous one is created, written and closed.
      */
-    private class Copier : AutoCloseable {
+    private class Pipeline(private val sink: OutputSink, private val paths: List<String>) : AutoCloseable {
+        private val openers: ExecutorService =
+            Executors.newFixedThreadPool(sink.parallelCreates.coerceIn(1, MAX_OPENERS), daemon("xci-opener"))
         private val writer: ExecutorService = Executors.newSingleThreadExecutor(daemon("xci-writer"))
-        val opener: ExecutorService = Executors.newSingleThreadExecutor(daemon("xci-opener"))
-        private val free = ArrayBlockingQueue<ByteArray>(DEPTH).also { q -> repeat(DEPTH) { q.add(ByteArray(BUFFER)) } }
+        private val free = ArrayBlockingQueue<ByteArray>(BUFFERS).also { q -> repeat(BUFFERS) { q.add(ByteArray(BUFFER)) } }
+        private val queue = LinkedBlockingQueue<Item>(BUFFERS * 4)
 
-        private class Chunk(val buf: ByteArray, val len: Int)
+        // Filled by the reading thread before any item for that file is queued (the queue hands it over safely).
+        private val outputs = arrayOfNulls<CompletableFuture<OutputStream>>(paths.size)
+        private var scheduled = 0
 
-        fun copy(src: RandomAccessSource, out: OutputStream, cancelled: () -> Boolean, onWritten: (Long) -> Unit) {
-            val size = src.size
-            if (size == 0L) return
-            val full = ArrayBlockingQueue<Chunk>(DEPTH + 1)
-            val written = AtomicLong()
-            val error = AtomicReference<Throwable?>()
-            val eof = Chunk(ByteArray(0), -1)
-            val job = writer.submit {
-                while (true) {
-                    val c = full.take()
-                    if (c === eof) break
-                    // After a write failure keep draining so the reader never blocks.
-                    if (error.get() == null) {
-                        try {
-                            out.write(c.buf, 0, c.len)
-                            written.addAndGet(c.len.toLong())
-                        } catch (t: Throwable) {
-                            error.set(t)
-                        }
-                    }
-                    free.put(c.buf)
-                }
-            }
+        // Owned by the writer thread; read by the reading thread only after the writer has finished.
+        private val closed = BooleanArray(paths.size)
+
+        private val written = AtomicLong()
+        private val error = AtomicReference<Throwable?>()
+        @Volatile private var aborted = false
+
+        private sealed class Item
+        private class Data(val file: Int, val buf: ByteArray, val len: Int) : Item()
+        private class End(val file: Int) : Item()
+        private object Stop : Item()
+
+        fun run(
+            sources: List<RandomAccessSource>,
+            cancelled: () -> Boolean,
+            onFile: (Int) -> Unit,
+            onProgress: (Long) -> Unit,
+        ) {
+            val job = writer.submit(::writeLoop)
+            var ok = false
             try {
-                var pos = 0L
-                while (pos < size) {
-                    if (cancelled()) throw ExtractionCancelledException()
-                    error.get()?.let { throw it }
-                    val buf = free.take()
-                    val n = minOf(BUFFER.toLong(), size - pos).toInt()
-                    try {
-                        src.readFully(pos, buf, 0, n)
-                    } catch (t: Throwable) {
-                        free.put(buf)
-                        throw t
+                for ((i, src) in sources.withIndex()) {
+                    scheduleOpens(minOf(paths.size, i + 1 + LOOKAHEAD))
+                    onFile(i)
+                    val size = src.size
+                    var pos = 0L
+                    while (pos < size) {
+                        if (cancelled()) throw ExtractionCancelledException()
+                        error.get()?.let { throw it }
+                        val buf = free.take()
+                        val n = minOf(BUFFER.toLong(), size - pos).toInt()
+                        try {
+                            src.readFully(pos, buf, 0, n)
+                        } catch (t: Throwable) {
+                            free.put(buf)
+                            throw t
+                        }
+                        queue.put(Data(i, buf, n))
+                        pos += n
+                        onProgress(written.get())
                     }
-                    full.put(Chunk(buf, n))
-                    pos += n
-                    onWritten(written.get())
+                    queue.put(End(i))
                 }
+                ok = true
             } finally {
-                full.put(eof)
+                if (!ok) aborted = true // the writer skips what is still queued
+                queue.put(Stop)
                 job.get()
+                if (!ok || error.get() != null) closeLeftovers()
             }
             error.get()?.let { throw it }
-            onWritten(written.get())
+            onProgress(written.get())
+        }
+
+        private fun scheduleOpens(upTo: Int) {
+            while (scheduled < upTo) {
+                val path = paths[scheduled]
+                outputs[scheduled] = CompletableFuture.supplyAsync({ sink.create(path) }, openers)
+                scheduled++
+            }
+        }
+
+        private fun writeLoop() {
+            while (true) {
+                when (val item = queue.take()) {
+                    Stop -> return
+                    is Data -> {
+                        if (!aborted && error.get() == null) {
+                            try {
+                                await(outputs[item.file]!!).write(item.buf, 0, item.len)
+                                written.addAndGet(item.len.toLong())
+                            } catch (t: Throwable) {
+                                error.compareAndSet(null, t)
+                            }
+                        }
+                        // After a failure keep draining so the reading thread never blocks.
+                        free.put(item.buf)
+                    }
+                    is End -> if (!aborted && error.get() == null) {
+                        closed[item.file] = true
+                        try {
+                            await(outputs[item.file]!!).close()
+                        } catch (t: Throwable) {
+                            error.compareAndSet(null, t)
+                        }
+                    }
+                }
+            }
+        }
+
+        /** On failure/cancel: don't leak streams that were opened ahead of time or left half-written. */
+        private fun closeLeftovers() {
+            for (i in 0 until scheduled) {
+                if (!closed[i]) runCatching { await(outputs[i]!!).close() }
+            }
         }
 
         override fun close() {
             writer.shutdownNow()
-            opener.shutdownNow()
+            openers.shutdownNow()
         }
 
+        /** Unwraps the real error (e.g. IOException) from a failed background open. */
+        private fun await(f: CompletableFuture<OutputStream>): OutputStream =
+            try {
+                f.get()
+            } catch (e: java.util.concurrent.ExecutionException) {
+                throw e.cause ?: e
+            }
+
         private companion object {
-            const val BUFFER = 4 shl 20
-            const val DEPTH = 3
+            const val BUFFER = 1 shl 20
+            const val BUFFERS = 16
+            const val LOOKAHEAD = BUFFERS
+            const val MAX_OPENERS = 8
             fun daemon(name: String) = java.util.concurrent.ThreadFactory { r -> Thread(r, name).apply { isDaemon = true } }
         }
     }
