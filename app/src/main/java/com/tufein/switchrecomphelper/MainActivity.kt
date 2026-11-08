@@ -22,6 +22,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var b: ActivityMainBinding
     private val vm: MainViewModel by viewModels()
     private var logVisible = false
+    private var logText = ""
 
     private val pickKeys = registerForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::importKeys) }
     private val pickXci = registerForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::setXci) }
@@ -66,7 +67,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyLogVisibility() {
-        b.log.visibility = if (logVisible && b.log.text.isNotEmpty()) View.VISIBLE else View.GONE
+        val show = logVisible && logText.isNotEmpty()
+        // The log can be ~20k characters and changes several times per second: only lay it out when it is visible.
+        if (show && b.log.text !== logText) b.log.text = logText
+        b.log.visibility = if (show) View.VISIBLE else View.GONE
         b.toggleLog.setText(if (logVisible) R.string.details_hide else R.string.details_show)
     }
 
@@ -92,7 +96,7 @@ class MainActivity : AppCompatActivity() {
             else MaterialColors.getColor(b.message, com.google.android.material.R.attr.colorOnSurface),
         )
 
-        b.log.text = s.log
+        logText = s.log
         b.toggleLog.visibility = if (s.log.isEmpty()) View.GONE else View.VISIBLE
         applyLogVisibility()
 

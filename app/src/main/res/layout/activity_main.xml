@@ -246,6 +246,13 @@
                     android:layout_height="wrap_content"
                     android:text="@string/options"
                     android:textAppearance="@style/TextAppearance.App.Step" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/options_hint"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
                 <com.google.android.material.materialswitch.MaterialSwitch
                     android:id="@+id/cbExefs"
                     android:layout_width="match_parent"

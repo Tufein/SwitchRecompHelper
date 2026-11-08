@@ -43,18 +43,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<UiState> = _state
 
     private val keysFile = File(app.filesDir, "prod.keys")
-    private var keys: KeySet? = null
+    @Volatile private var keys: KeySet? = null
     private var job: Job? = null
 
     @Volatile private var cancelRequested = false
     @Volatile private var pendingFile = ""
 
     init {
-        // Keys imported earlier are kept in app-private storage.
-        if (keysFile.exists()) {
-            runCatching { KeySet.parse(keysFile.readText()) }.getOrNull()?.takeIf { it.hasHeaderKey }?.let {
-                keys = it
-                _state.update { s -> s.copy(keysText = getString(R.string.keys_loaded, it.size)) }
+        // Keys imported earlier are kept in app-private storage. Read them off the main thread so startup stays smooth.
+        viewModelScope.launch(Dispatchers.IO) {
+            if (!keysFile.exists()) return@launch
+            val loaded = runCatching { KeySet.parse(keysFile.readText()) }.getOrNull()?.takeIf { it.hasHeaderKey } ?: return@launch
+            if (keys == null) { // a fresh import wins
+                keys = loaded
+                _state.update { s -> s.copy(keysText = getString(R.string.keys_loaded, loaded.size)) }
             }
         }
     }
@@ -135,13 +137,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             var lastBytes = 0L
             var smoothed = 0.0
             val logBuf = StringBuilder()
+            var logDirty = false
+            var logText = ""
             val listener = object : ProgressListener {
                 override val cancelled: Boolean get() = cancelRequested
 
                 override fun status(message: String) {
                     // Called once per file (thousands for RomFS): only append here, publish on the progress tick.
                     logBuf.append(message).append('\n')
-                    if (logBuf.length > MAX_LOG_CHARS) logBuf.delete(0, logBuf.length - MAX_LOG_CHARS)
+                    // Trim in batches: dropping the head on every line costs a full copy per file.
+                    if (logBuf.length > 2 * MAX_LOG_CHARS) logBuf.delete(0, logBuf.length - MAX_LOG_CHARS)
+                    logDirty = true
                     pendingFile = message
                 }
 
@@ -157,7 +163,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     lastBytes = doneBytes
                     val p = if (totalBytes > 0) (doneBytes * 1000 / totalBytes).toInt() else 0
                     val eta = if (smoothed > 1.0 && totalBytes > doneBytes) ((totalBytes - doneBytes) / smoothed).toLong() else -1L
-                    val log = logBuf.toString()
+                    if (logDirty) {
+                        logText = logBuf.toString()
+                        logDirty = false
+                    }
+                    val log = logText
                     _state.update {
                         it.copy(progress = p, speedBytesPerSec = smoothed.toLong(), etaSeconds = eta, currentFile = pendingFile, log = log)
                     }
