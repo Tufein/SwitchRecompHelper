@@ -44,3 +44,16 @@ Android-app die een XCI-dump van je **eigen** Switch-cartridge uitpakt naar **Ex
 ## Testen
 De tests gebruiken synthetische XCI/NSP/NSZ-bestanden (met echte zstd-compressie) met eigen testsleutels (zelfde layout als de parser leest) en de
 IEEE 1619 XTS-testvector. Ze zijn **niet** gevalideerd tegen een echte cartridge-dump.
+
+## Licentie
+
+SwitchRecompHelper staat onder de [GPL-3.0-or-later](LICENSE). De app bevat geen console-sleutels,
+geen spelgegevens en geen Nintendo-materiaal; `prod.keys` en je dumps blijven op je eigen toestel.
+
+## Beveiliging
+
+Zie [SECURITY.md](SECURITY.md) voor hoe je een kwetsbaarheid meldt en welke geheimen dit project bewaart.
+
+## Documentation
+
+[Meedoen](CONTRIBUTING.md) · [Beveiliging](SECURITY.md)

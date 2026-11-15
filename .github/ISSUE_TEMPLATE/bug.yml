@@ -1,0 +1,28 @@
+name: Probleem melden
+description: Meld een uitpakfout met de appversie en het bestandstype dat je probeerde.
+body:
+  - type: markdown
+    attributes:
+      value: Deel NOOIT je prod.keys, een titelsleutel of een dump; noem alleen program-id en bestandstype.
+  - type: input
+    id: version
+    attributes:
+      label: Versie en downloadbron
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Android-toestel, Android-versie en SwitchRecompHelper-versie
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Stappen, verwacht resultaat en echt resultaat
+    validations:
+      required: true
+  - type: textarea
+    id: conditions
+    attributes:
+      label: Type dump (XCI/NSP/NSZ), gewenste uitvoer en de foutmelding uit de app
