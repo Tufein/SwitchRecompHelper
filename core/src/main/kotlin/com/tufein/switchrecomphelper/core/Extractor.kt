@@ -1,6 +1,7 @@
 package com.tufein.switchrecomphelper.core
 
 import com.tufein.switchrecomphelper.core.fs.Nca
+import com.tufein.switchrecomphelper.core.fs.Nso
 import com.tufein.switchrecomphelper.core.fs.Ticket
 import com.tufein.switchrecomphelper.core.fs.PartitionFs
 import com.tufein.switchrecomphelper.core.fs.RomFs
@@ -35,9 +36,23 @@ interface ProgressListener {
     val cancelled: Boolean get() = false
 }
 
-class ExtractOptions(val exeFs: Boolean = true, val romFs: Boolean = true)
+class ExtractOptions(
+    val exeFs: Boolean = true,
+    val romFs: Boolean = true,
+    /** Also write every ExeFS NSO uncompressed (LZ4 segments unpacked, hashes checked) to `exefs_uncompressed/`. */
+    val uncompressedNso: Boolean = true,
+    /** Write `recomp_info.toml` (title id, SHA-256 and build ids of the ExeFS files) next to `exefs/`. */
+    val recompInfo: Boolean = true,
+)
 
-class TitleResult(val programId: Long, val folder: String, val exeFsFiles: Int, val romFsFiles: Int)
+class TitleResult(
+    val programId: Long,
+    val folder: String,
+    val exeFsFiles: Int,
+    val romFsFiles: Int,
+    /** Uncompressed NSO copies written to `exefs_uncompressed/`. */
+    val uncompressedNsoFiles: Int = 0,
+)
 
 class ExtractionResult(val titles: List<TitleResult>, val totalFiles: Int, val totalBytes: Long)
 
@@ -70,6 +85,8 @@ class SwitchExtractor(private val keys: KeySet) {
 
         val planned = ArrayList<Planned>()
         val titles = ArrayList<TitleResult>()
+        // (path, toml) per title; built after the pipeline because the hashes are only known then.
+        val manifestBuilders = ArrayList<() -> Pair<String, String>>()
         val usedFolders = HashSet<String>()
 
         for ((group, entry) in container.entries.withIndex()) {
@@ -87,6 +104,8 @@ class SwitchExtractor(private val keys: KeySet) {
             }
             var exeCount = 0
             var romCount = 0
+            var nsoCount = 0
+            val exeInfos = ArrayList<ExeFsFileInfo>()
             for (section in nca.sections) {
                 if (section.isPfs0 && options.exeFs && exeCount == 0) {
                     val pfs = try {
@@ -98,8 +117,24 @@ class SwitchExtractor(private val keys: KeySet) {
                     // The logo section is also a PFS0; ExeFS is the one with the executable.
                     if (pfs.find("main") == null && pfs.find("main.npdm") == null) continue
                     for (f in pfs.entries) {
-                        planned.add(Planned("$folder/exefs/${safeName(f.name)}", pfs.open(f), group, section.start, f.offset))
+                        val name = safeName(f.name)
+                        val src = pfs.open(f)
+                        val info = ExeFsFileInfo(name, f.size).also { exeInfos.add(it) }
+                        planned.add(Planned("$folder/exefs/$name", DigestingSource(src) { info.sha256 = it }, group, section.start, f.offset))
                         exeCount++
+                        if (!options.uncompressedNso || !Nso.isNso(src)) continue
+                        val header = try {
+                            Nso.parseHeader(src, "ExeFS '$name'")
+                        } catch (e: SwitchFormatException) {
+                            listener.status("Not decompressing $name: ${e.message}")
+                            continue
+                        }
+                        val path = "exefs_uncompressed/$name"
+                        val nso = NsoInfo(header.buildIdHex, path, header.uncompressedFileSize)
+                        info.nso = nso
+                        // Same sort key as the original: read right after it, while that part of the dump is still warm.
+                        planned.add(Planned("$folder/$path", UncompressedNsoSource(src, header, "ExeFS '$name'", nso), group, section.start, f.offset))
+                        nsoCount++
                     }
                 } else if (section.isRomFs && options.romFs && romCount == 0) {
                     val image = try {
@@ -114,7 +149,12 @@ class SwitchExtractor(private val keys: KeySet) {
                     }
                 }
             }
-            titles.add(TitleResult(nca.programId, folder, exeCount, romCount))
+            titles.add(TitleResult(nca.programId, folder, exeCount, romCount, nsoCount))
+            if (options.recompInfo && exeInfos.isNotEmpty()) {
+                val programId = nca.programId
+                val source = entry.name
+                manifestBuilders.add { "$folder/${RecompInfo.FILE_NAME}" to RecompInfo.toml(programId, source, exeInfos) }
+            }
         }
         if (titles.isEmpty()) throw SwitchFormatException("No Program NCA found (is this a base game dump? update/DLC-only files are not supported)")
         // Read in on-disk order: required for single-stream NCZ (forward-only), and kinder to storage anyway.
@@ -130,7 +170,12 @@ class SwitchExtractor(private val keys: KeySet) {
                 onProgress = { written -> listener.progress(written, total) },
             )
         }
-        return ExtractionResult(titles, planned.size, total)
+        val manifests = manifestBuilders.map { it() }
+        for ((path, text) in manifests) {
+            listener.status("Writing $path")
+            sink.create(path).use { it.write(text.toByteArray(Charsets.UTF_8)) }
+        }
+        return ExtractionResult(titles, planned.size + manifests.size, total)
     }
 
     private fun openContainer(source: RandomAccessSource): PartitionFs {

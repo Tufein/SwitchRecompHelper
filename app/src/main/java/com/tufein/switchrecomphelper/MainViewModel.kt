@@ -182,7 +182,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         val sink = SafSink(resolver, out, folder)
                         val result = SwitchExtractor(k).extract(source, sink, ExtractOptions(exeFs, romFs), listener)
                         val titleLines = result.titles.joinToString("\n") {
-                            getString(R.string.title_line, it.folder, it.exeFsFiles, it.romFsFiles)
+                            getString(R.string.title_line, it.folder, it.exeFsFiles, it.romFsFiles, it.uncompressedNsoFiles)
                         }
                         _state.update { st ->
                             st.copy(

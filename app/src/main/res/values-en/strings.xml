@@ -21,7 +21,7 @@
     <string name="failed">Failed: %1$s</string>
     <string name="need_all">Choose keys, XCI and output folder first</string>
     <string name="need_part">Select ExeFS and/or RomFS</string>
-    <string name="title_line">Title %1$s → %2$d ExeFS, %3$d RomFS files</string>
+    <string name="title_line">Title %1$s → %2$d ExeFS, %3$d RomFS files, %4$d uncompressed NSOs</string>
     <string name="tagline">Extract XCI, NSP and NSZ to ExeFS and RomFS</string>
     <string name="help">Help</string>
     <string name="options">What to extract?</string>
@@ -35,7 +35,7 @@
     <string name="onb_3_title">How it works</string>
     <string name="onb_3_body">1. Choose your prod.keys. You only do this once: the app remembers them.\n2. Choose your dump (XCI, NSP or NSZ).\n3. Choose the folder for the result.\n4. Switch ExeFS and/or RomFS on and tap Extract.\n\nWhile extracting you see progress, speed and time left. Tap Cancel to stop.</string>
     <string name="onb_4_title">Result and tips</string>
-    <string name="onb_4_body">The files go into a new folder named after your dump + _extracted:\n\nMyGame_extracted/\n    0100…/exefs/   main, main.npdm, …\n    0100…/romfs/   the game data\n\nThe 0100… folder is the game’s title ID. Copy that folder to your PC or recomp project afterwards.\n\n• Make sure you have enough free space: RomFS is often several GB.\n• Keep the app open while extracting; the screen stays on.\n• An NSZ is compressed and takes a bit more processing time.\n• Updates and DLC (patches) are not supported: pick the base game.</string>
+    <string name="onb_4_body">The files go into a new folder named after your dump + _extracted:\n\nMyGame_extracted/\n    0100…/exefs/   main, main.npdm, …\n    0100…/exefs_uncompressed/   main, … without LZ4 compression\n    0100…/romfs/   the game data\n    0100…/recomp_info.toml   title ID, build IDs and SHA-256 hashes\n\nThe 0100… folder is the game’s title ID. Copy that folder to your PC or recomp project afterwards.\n\n• Make sure you have enough free space: RomFS is often several GB.\n• Keep the app open while extracting; the screen stays on.\n• An NSZ is compressed and takes a bit more processing time.\n• Updates and DLC (patches) are not supported: pick the base game.</string>
     <string name="speed_fmt">%1$s/s</string>
     <string name="eta_fmt">About %1$s left</string>
     <string name="eta_calculating">Estimating time left…</string>
@@ -53,6 +53,6 @@
     <string name="onb_flow_out">ExeFS + RomFS</string>
     <string name="onb_flow_desc">Your dump is decrypted with your keys and unpacked into ExeFS and RomFS</string>
     <string name="onb_parts_title">ExeFS and RomFS</string>
-    <string name="onb_parts_body">ExeFS: the code\n• main: the game program itself. This is what a recompiler translates.\n• main.npdm: information about the program (including the title ID and permissions).\n• rtld, sdk, subsdk…: libraries the game ships with.\nThese files stay in the NSO format used on the Switch; the app does not unpack them further.\n\nRomFS: the game data\n• Images, models, sound, music, levels and text.\n• Often thousands of files and several GB.\n\nOnly need the code? Switch RomFS off: it saves a lot of time and space.</string>
+    <string name="onb_parts_body">ExeFS: the code\n• main: the game program itself. This is what a recompiler translates.\n• main.npdm: information about the program (including the title ID and permissions).\n• rtld, sdk, subsdk…: libraries the game ships with.\nexefs/ keeps them unchanged (NSO, compressed as on the Switch). exefs_uncompressed/ holds the same NSOs without LZ4 compression, with their hashes checked: that is what recompilers and disassemblers read. recomp_info.toml lists the build ID and SHA-256 of every file, so you can check that your dump is the version a recomp expects.\n\nRomFS: the game data\n• Images, models, sound, music, levels and text.\n• Often thousands of files and several GB.\n\nOnly need the code? Switch RomFS off: it saves a lot of time and space.</string>
     <string name="options_hint">ExeFS is the game’s code (needed for a recomp). RomFS is the game data such as images and sound, often several GB.</string>
 </resources>
