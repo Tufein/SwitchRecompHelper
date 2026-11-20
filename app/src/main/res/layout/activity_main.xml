@@ -268,6 +268,13 @@
                     android:checked="true"
                     android:minHeight="48dp"
                     android:text="@string/cb_romfs" />
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/cbVerify"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:minHeight="48dp"
+                    android:text="@string/cb_verify" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

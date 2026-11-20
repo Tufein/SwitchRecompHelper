@@ -9,6 +9,6 @@
 - [ ] Geen `prod.keys`, titelsleutel, dump of Nintendo-materiaal in de diff
 - [ ] gedrag na annuleren of een fout (half-uitgepakte map) is bewust, of er staat een test bij die
       laat zien wat er achterblijft
-- [ ] `README.md` (Nederlands) en de unsupported-lijst (BKTR/updates, IVFC,
-      console-gebonden tickets) zijn aangepast als dit pakket daar iets aan verandert
+- [ ] `README.md` (Nederlands) en de niet-ondersteund-lijst (updates in NSZ/XCZ, SHA-3,
+      L2-patchtabellen, console-gebonden tickets) zijn aangepast als dit pakket daar iets aan verandert
 - [ ] Zie [SECURITY.md](../SECURITY.md) voor wat wel en niet gedeeld mag worden

@@ -18,13 +18,15 @@ class NcaSection(
     /** 0 = RomFS, 1 = PartitionFS (PFS0) */
     val fsType: Int,
     val hashType: Int,
-    /** 0/3 = AES-CTR, 1 = none, 4 = BKTR (patch, unsupported) */
+    /** 0/3 = AES-CTR, 1 = none, 4 = AES-CTR-EX with a bucket-tree patch (update RomFS, see [Nca.openPatchedSection]) */
     val encryptionType: Int,
     internal val fsHeader: ByteArray,
 ) {
     val size: Long get() = end - start
     val isRomFs: Boolean get() = fsType == 0
     val isPfs0: Boolean get() = fsType == 1
+    /** An update section: its data is the difference to the base game's section. */
+    val isPatch: Boolean get() = encryptionType == 4
 }
 
 /** Nintendo Content Archive. Header is decrypted on construction; section keys are derived lazily. */
@@ -116,7 +118,8 @@ class Nca(
     /** Whole section, decrypted. Offsets are relative to the section start. */
     fun openSection(s: NcaSection): RandomAccessSource {
         if (s.encryptionType !in SUPPORTED_ENCRYPTION) {
-            throw UnsupportedSectionException("Section ${s.index} is a patch/BKTR section, which is not supported")
+            if (s.isPatch) throw UnsupportedSectionException("Section ${s.index} is an update (patch) section; it needs its base game")
+            throw UnsupportedSectionException("Unsupported section encryption type ${s.encryptionType}")
         }
         if (compressed) {
             // NCZ stores sections already decrypted; no section key is needed.
@@ -134,29 +137,98 @@ class Nca(
         }
     }
 
+    /**
+     * The decrypted patch section of an update NCA (encryption type 4, "BKTR"): the base game's section [base] with
+     * the update's changes applied. The result has the same layout as a base section, so its FS header applies to it.
+     *
+     * Layout (offsets relative to the section): patch data [0, subsectionTable), the subsection table (AES-CTR,
+     * entries with their own generation) and the relocation table (indirect, normally read through the subsection layer).
+     */
+    fun openPatchedSection(s: NcaSection, base: RandomAccessSource): RandomAccessSource {
+        if (!s.isPatch) throw SwitchFormatException("Section ${s.index} is not an update section")
+        if (compressed) throw UnsupportedSectionException("Update sections inside a compressed (NCZ/XCZ) file are not supported yet")
+        val fh = ByteBuffer.wrap(s.fsHeader).order(ByteOrder.LITTLE_ENDIAN)
+        val indirectOffset = fh.getLong(0x100)
+        val indirectSize = fh.getLong(0x108)
+        val subsectionOffset = fh.getLong(0x120)
+        val subsectionSize = fh.getLong(0x128)
+        if (indirectOffset < 0 || indirectSize <= 0 || subsectionOffset < 0 || subsectionSize <= 0 ||
+            indirectOffset + indirectSize > subsectionOffset || subsectionOffset + subsectionSize > s.size
+        ) {
+            throw SwitchFormatException("Section ${s.index} has an invalid update layout (wrong keys or corrupt dump?)")
+        }
+        // Tables are AES-CTR with the section's own IV. With the 14.0+ meta hash layer the relocation table is read
+        // around the subsection layer; without it, it is read through it (as the console does).
+        val tablesAroundSubsections = s.fsHeader[5].toInt() == 1
+        val upper = s.fsHeader.copyOfRange(0x140, 0x148).reversedArray()
+        val raw = source.slice(s.start, s.size)
+        fun plainTable(offset: Long, size: Long): RandomAccessSource =
+            AesCtrSource(raw.slice(offset, size), ctrKey, upper, s.start + offset)
+        val secureValue = fh.getInt(0x144)
+        val subsectionTable = BucketTree.open(plainTable(subsectionOffset, subsectionSize), 0x10, "Section ${s.index} subsections")
+        val patchData = AesCtrExSource(raw.slice(0, subsectionOffset), subsectionTable, ctrKey, secureValue, s.start)
+        val relocationRaw = if (tablesAroundSubsections) plainTable(indirectOffset, indirectSize) else patchData.slice(indirectOffset, indirectSize)
+        val relocations = BucketTree.open(relocationRaw, 0x14, "Section ${s.index} relocations")
+        return IndirectSource(base, patchData, relocations)
+    }
+
     /** The filesystem payload of a section, i.e. the PFS0 or RomFS image without the integrity hash layers. */
-    fun openFilesystem(s: NcaSection): RandomAccessSource {
-        val section = openSection(s)
+    fun openFilesystem(s: NcaSection, verifyHashes: Boolean = true): RandomAccessSource =
+        layoutFilesystem(s, openSection(s), verifyHashes)
+
+    /** Like [openFilesystem], for an update section; [base] is the decrypted section of the base game. */
+    fun openPatchedFilesystem(s: NcaSection, base: RandomAccessSource, verifyHashes: Boolean = true): RandomAccessSource =
+        layoutFilesystem(s, openPatchedSection(s, base), verifyHashes)
+
+    private fun layoutFilesystem(s: NcaSection, section: RandomAccessSource, verifyHashes: Boolean): RandomAccessSource {
         val bb = ByteBuffer.wrap(s.fsHeader).order(ByteOrder.LITTLE_ENDIAN)
-        val (offset, size) = when {
+        return when {
             s.isPfs0 -> {
                 // HierarchicalSha256: layer regions start at 0x30, the last layer is the PFS0 itself.
                 val layers = bb.getInt(0x2C)
                 val idx = (layers - 1).coerceIn(1, 5)
-                bb.getLong(0x30 + idx * 0x10) to bb.getLong(0x38 + idx * 0x10)
+                val (offset, size) = bb.getLong(0x30 + idx * 0x10) to bb.getLong(0x38 + idx * 0x10)
+                checkRegion(s, section, offset, size)
+                val payload = section.slice(offset, size)
+                if (!verifyHashes || s.hashType != 2) {
+                    payload
+                } else {
+                    val tableOffset = bb.getLong(0x30)
+                    val tableSize = bb.getLong(0x38)
+                    checkRegion(s, section, tableOffset, tableSize)
+                    // HierarchicalSha256: master hash at 0x08, block size at 0x28.
+                    Sha256Verifier(section.slice(tableOffset, tableSize), payload, bb.getInt(0x28), s.fsHeader.copyOfRange(0x08, 0x28)).data
+                }
             }
             s.isRomFs -> {
                 // IVFC: levels start at 0x18 (0x18 bytes each), the last level is the RomFS image.
-                val levels = bb.getInt(0x14)
-                val idx = (levels - 2).coerceIn(0, 5)
-                bb.getLong(0x18 + idx * 0x18) to bb.getLong(0x20 + idx * 0x18)
+                val levelCount = bb.getInt(0x14)
+                val idx = (levelCount - 2).coerceIn(0, 5)
+                val (offset, size) = bb.getLong(0x18 + idx * 0x18) to bb.getLong(0x20 + idx * 0x18)
+                checkRegion(s, section, offset, size)
+                if (!verifyHashes || s.hashType == 1 || s.hashType == 0) {
+                    section.slice(offset, size)
+                } else if (s.hashType == 3) {
+                    val levels = (0 until levelCount - 1).map { i ->
+                        val at = 0x18 + i * 0x18
+                        IvfcLevel(bb.getLong(at), bb.getLong(at + 8), bb.getInt(at + 0x10))
+                    }
+                    // IVFC: master hash at 0xC8 (IntegrityMetaInfo.MasterHash).
+                    IvfcVerifier(section, levels, s.fsHeader.copyOfRange(0xC8, 0xE8)).data
+                } else {
+                    throw UnsupportedSectionException(
+                        "Section ${s.index} uses hash type ${s.hashType} (SHA-3), which the hash check does not support yet. Turn off the hash check to extract it.",
+                    )
+                }
             }
             else -> throw SwitchFormatException("Unknown section filesystem type ${s.fsType}")
         }
+    }
+
+    private fun checkRegion(s: NcaSection, section: RandomAccessSource, offset: Long, size: Long) {
         if (offset < 0 || size <= 0 || offset > section.size || size > section.size - offset) {
             throw SwitchFormatException("Section ${s.index} layout is invalid (wrong keys or corrupt dump?)")
         }
-        return section.slice(offset, size)
     }
 
     companion object {

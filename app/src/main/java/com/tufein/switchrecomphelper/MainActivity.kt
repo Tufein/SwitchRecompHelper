@@ -1,6 +1,9 @@
 package com.tufein.switchrecomphelper
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.text.format.Formatter
 import android.view.View
@@ -26,6 +29,7 @@ class MainActivity : AppCompatActivity() {
 
     private val pickKeys = registerForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::importKeys) }
     private val pickXci = registerForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::setXci) }
+    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { startExtraction() }
     private val pickOut = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             contentResolver.takePersistableUriPermission(
@@ -54,7 +58,14 @@ class MainActivity : AppCompatActivity() {
         b.pickKeys.setOnClickListener { pickKeys.launch(arrayOf("*/*")) }
         b.pickXci.setOnClickListener { pickXci.launch(arrayOf("*/*")) }
         b.pickOut.setOnClickListener { pickOut.launch(null) }
-        b.start.setOnClickListener { vm.start(b.cbExefs.isChecked, b.cbRomfs.isChecked) }
+        b.start.setOnClickListener {
+            // Android 13+ asks for notifications; without it the extraction still runs, just without the notification.
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                startExtraction()
+            }
+        }
         b.cancel.setOnClickListener { vm.cancel() }
         b.toggleLog.setOnClickListener {
             logVisible = !logVisible
@@ -65,6 +76,8 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) { vm.state.collect(::render) }
         }
     }
+
+    private fun startExtraction() = vm.start(b.cbExefs.isChecked, b.cbRomfs.isChecked, b.cbVerify.isChecked)
 
     private fun applyLogVisibility() {
         val show = logVisible && logText.isNotEmpty()
@@ -107,6 +120,7 @@ class MainActivity : AppCompatActivity() {
         b.pickOut.isEnabled = idle
         b.cbExefs.isEnabled = idle
         b.cbRomfs.isEnabled = idle
+        b.cbVerify.isEnabled = idle
         if (s.running) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }

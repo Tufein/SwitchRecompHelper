@@ -9,6 +9,11 @@
     <string name="btn_pick_out">Choose output folder</string>
     <string name="cb_exefs">Extract ExeFS (code)</string>
     <string name="cb_romfs">Extract RomFS (game data)</string>
+    <string name="cb_verify">Check hashes (slower; stops at a corrupt dump)</string>
+    <string name="notif_channel">Extraction</string>
+    <string name="notif_title">Extracting</string>
+    <string name="notif_starting">Starting…</string>
+    <string name="title_update">(update applied)</string>
     <string name="btn_start">Extract</string>
     <string name="btn_cancel">Cancel</string>
     <string name="keys_none">No keys yet: choose the prod.keys from your own Switch</string>
@@ -35,7 +40,7 @@
     <string name="onb_3_title">How it works</string>
     <string name="onb_3_body">1. Choose your prod.keys. You only do this once: the app remembers them.\n2. Choose your dump (XCI, NSP or NSZ).\n3. Choose the folder for the result.\n4. Switch ExeFS and/or RomFS on and tap Extract.\n\nWhile extracting you see progress, speed and time left. Tap Cancel to stop.</string>
     <string name="onb_4_title">Result and tips</string>
-    <string name="onb_4_body">The files go into a new folder named after your dump + _extracted:\n\nMyGame_extracted/\n    0100…/exefs/   main, main.npdm, …\n    0100…/exefs_uncompressed/   main, … without LZ4 compression\n    0100…/romfs/   the game data\n    0100…/recomp_info.toml   title ID, build IDs and SHA-256 hashes\n\nThe 0100… folder is the game’s title ID. Copy that folder to your PC or recomp project afterwards.\n\n• Make sure you have enough free space: RomFS is often several GB.\n• Keep the app open while extracting; the screen stays on.\n• An NSZ is compressed and takes a bit more processing time.\n• Updates and DLC (patches) are not supported: pick the base game.</string>
+    <string name="onb_4_body">The files go into a new folder named after your dump + _extracted:\n\nMyGame_extracted/\n    0100…/exefs/   main, main.npdm, …\n    0100…/exefs_uncompressed/   main, … without LZ4 compression\n    0100…/romfs/   the game data\n    0100…/recomp_info.toml   title ID, build IDs and SHA-256 hashes\n\nThe 0100… folder is the game’s title ID. Copy that folder to your PC or recomp project afterwards.\n\n• Make sure you have enough free space: RomFS is often several GB.\n• Extracting continues when you switch to another app or the screen turns off. A notification then shows the progress and a Cancel button.\n• An NSZ is compressed and takes a bit more processing time.\n• Updates are applied when they are in the same file as the base game (for example the update partition of an XCI, or an NSP with both). Without the base game in the file, an update is skipped.</string>
     <string name="speed_fmt">%1$s/s</string>
     <string name="eta_fmt">About %1$s left</string>
     <string name="eta_calculating">Estimating time left…</string>
@@ -44,7 +49,7 @@
     <string name="dur_hm">%1$d h %2$d min</string>
     <string name="percent_fmt">%1$d%%</string>
     <string name="onb_5_title">Something went wrong?</string>
-    <string name="onb_5_body">• \"header_key\" or \"NCA header could not be decrypted\": your prod.keys do not match this dump or are incomplete.\n• \"master_key_xx is missing\": your keys come from older firmware than the game needs. Dump new keys.\n• \"title key … not in your key file\": for an NSP/NSZ without a ticket, add the title key.\n• \"truncated\": the file was not copied completely.\n\nTap the question mark at the top right to see this guide again.</string>
+    <string name="onb_5_body">• \"header_key\" or \"NCA header could not be decrypted\": your prod.keys do not match this dump or are incomplete.\n• \"master_key_xx is missing\": your keys come from older firmware than the game needs. Dump new keys.\n• \"title key … not in your key file\": for an NSP/NSZ without a ticket, add the title key.\n• \"truncated\": the file was not copied completely.\n• \"hash check failed\": a part of the dump does not match its hashes: the dump is corrupt, or your keys do not match. Turn \"Check hashes\" off to extract it anyway (the error is then not reported).\n\nTap the question mark at the top right to see this guide again.</string>
     <string name="cannot_open">Cannot open the file</string>
     <string name="onb_what_title">What does this app do?</string>
     <string name="onb_what_body">A Switch game (XCI, NSP or NSZ) is one big encrypted package. A recomp tool cannot use it as is.\n\nThis app opens that package with the keys from your own Switch and unpacks it into ordinary folders and files: ExeFS (the game’s code) and RomFS (the game data).\n\nThat is the first step of a recomp. Static recompilation translates a game’s code into a program that runs on another device without an emulator, and these are exactly the files it needs.\n\nEverything happens on your phone; nothing is uploaded.</string>
