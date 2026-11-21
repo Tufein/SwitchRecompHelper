@@ -9,8 +9,15 @@ met het Storage Access Framework.
 - `core/src/main/kotlin/.../fs/` — `Xci.kt` en `Containers.kt` (partities en containers), `Nca.kt`
   (header, secties, titelsleutels), `Ncz.kt` (compressie) en `Ticket.kt`.
 - `core/src/main/kotlin/.../Extractor.kt` — van dump naar mappen, met `safeName`/`safePath`
-  (regels 302-309) voor namen uit de ROM en `closeLeftovers` voor afgebroken runs; ernaast
+  (regels 347-353) voor namen uit de ROM en `closeLeftovers` voor afgebroken runs; ernaast
   `KeySet.kt`, `crypto/` (`Aes.kt`) en `io/` (`RandomAccessSource.kt`).
+- `core/src/main/kotlin/.../fs/Nso.kt` en `Lz4.kt` — NSO-header, LZ4-blokdecompressie en segmenthashes;
+  `RecompInfo.kt` schrijft `recomp_info.toml`.
+- `core/src/main/kotlin/.../fs/Bktr.kt` — updates: bucket tree, de AES-CTR-ex-laag met subsectie-counters
+  en de relocatielaag die base en patch samenvoegt (`Nca.openPatchedSection`). `HashVerify.kt` — de
+  hashcontrole van IVFC (RomFS) en HierarchicalSha256 (PFS0), die bij elke gelezen blok de hash naloopt.
+- `app/src/main/java/.../ExtractionService.kt` — foreground service (achtergrond, melding, annuleren) die
+  de extractie in `MainViewModel` in leven houdt; de koppeling loopt via `ExtractionBridge`.
 - `app/src/main/java/.../MainViewModel.kt` — keuzes van de gebruiker, voortgang en
   SAF-uitvoer (`SafSink.kt`), plus `MainActivity.kt` en `OnboardingActivity.kt`.
 
@@ -31,9 +38,10 @@ CI draait precies deze twee stappen en publiceert daarna de debug-APK.
   en testsleutels in dezelfde layout die de parser leest. Er staat geen Nintendo-materiaal in deze
   repo, en er komt geen `prod.keys`-voorbeeld bij: een dump van een echte cartridge kun je niet
   meesturen.
-- **Elke niet-ondersteunde sectie geeft een melding, geen stiltesucces.** Updates/DLC (BKTR),
-  hash-controle (IVFC), NSO-decompressie en console-gebonden tickets zijn nu expliciet buiten
-  scope (`README.md`); een verbetering daar verandert dus ook die lijst en de release-notities.
+- **Elke niet-ondersteunde sectie geeft een melding, geen stiltesucces.** Updates in NSZ/XCZ, SHA-3-hashes,
+  patch-tabellen met L2-knopen en console-gebonden tickets zijn expliciet buiten scope (`README.md`); een
+  verbetering daar verandert dus ook die lijst en de release-notities. Een hashcontrole die faalt, stopt het
+  uitpakken met een melding; er is alleen een uitweg via de optie "Hashes controleren" (`verifyHashes`).
 - **Namen uit een ROM zijn ongecontroleerd.** Een pad dat buiten de gekozen uitvoermap wijst, moet
   door `safePath` afgeschermd blijven; gedraagt een dump zich anders, meld dat dan via
   [SECURITY.md](SECURITY.md).

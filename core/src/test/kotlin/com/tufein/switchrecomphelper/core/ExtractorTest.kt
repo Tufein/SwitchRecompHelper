@@ -46,7 +46,8 @@ class ExtractorTest {
         val result = SwitchExtractor(keys).extract(ByteArraySource(img.standardXci()), sink)
         for ((n, d) in img.exefsFiles) assertContentEquals(d, sink.bytes("${hexId()}/exefs/$n"), n)
         for ((n, d) in img.romfsFiles) assertContentEquals(d, sink.bytes("${hexId()}/romfs/$n"), n)
-        assertEquals(img.exefsFiles.size + img.romfsFiles.size, sink.files.size) // logo section must not be treated as ExeFS
+        // logo section must not be treated as ExeFS; + recomp_info.toml
+        assertEquals(img.exefsFiles.size + img.romfsFiles.size + 1, sink.files.size)
         assertEquals(1, result.titles.size)
         assertEquals(sink.files.size, result.totalFiles)
     }
@@ -65,7 +66,7 @@ class ExtractorTest {
         assertTrue(sink.files.keys.all { "/romfs/" in it })
         val sink2 = MemorySink()
         SwitchExtractor(keys).extract(ByteArraySource(img.standardXci()), sink2, ExtractOptions(exeFs = true, romFs = false))
-        assertTrue(sink2.files.keys.all { "/exefs/" in it })
+        assertTrue(sink2.files.keys.all { "/exefs/" in it || it.endsWith("/" + RecompInfo.FILE_NAME) }, sink2.files.keys.toString())
     }
 
     @Test

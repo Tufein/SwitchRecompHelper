@@ -110,7 +110,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         cancelRequested = true
     }
 
-    fun start(exeFs: Boolean, romFs: Boolean) {
+    fun start(exeFs: Boolean, romFs: Boolean, verifyHashes: Boolean = true) {
         val s = _state.value
         val k = keys
         val xci = s.xciUri
@@ -128,6 +128,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update {
             it.copy(running = true, progress = 0, speedBytesPerSec = 0, etaSeconds = -1, currentFile = "", isError = false, message = "", log = "")
         }
+        // The service keeps the process alive and shows the progress while the app is in the background.
+        ExtractionBridge.cancelHandler = { cancel() }
+        ExtractionBridge.status.value = ExtractionStatus(running = true, text = getString(R.string.notif_starting))
+        ExtractionService.start(getApplication<Application>())
 
         job = viewModelScope.launch(Dispatchers.IO) {
             val app = getApplication<Application>()
@@ -171,6 +175,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _state.update {
                         it.copy(progress = p, speedBytesPerSec = smoothed.toLong(), etaSeconds = eta, currentFile = pendingFile, log = log)
                     }
+                    ExtractionBridge.status.update { it.copy(progress = p, text = pendingFile) }
                 }
             }
             try {
@@ -180,9 +185,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     val stream = FileInputStream(it.fileDescriptor)
                     FileChannelSource(stream.channel, stream).use { source ->
                         val sink = SafSink(resolver, out, folder)
-                        val result = SwitchExtractor(k).extract(source, sink, ExtractOptions(exeFs, romFs), listener)
+                        val options = ExtractOptions(exeFs, romFs, verifyHashes = verifyHashes)
+                        val result = SwitchExtractor(k).extract(source, sink, options, listener)
                         val titleLines = result.titles.joinToString("\n") {
-                            getString(R.string.title_line, it.folder, it.exeFsFiles, it.romFsFiles)
+                            getString(R.string.title_line, it.folder, it.exeFsFiles, it.romFsFiles, it.uncompressedNsoFiles) +
+                                if (it.updateApplied) " " + getString(R.string.title_update) else ""
                         }
                         _state.update { st ->
                             st.copy(
@@ -202,6 +209,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         message = getString(R.string.failed, e.message ?: e.javaClass.simpleName), log = logBuf.toString(),
                     )
                 }
+            } finally {
+                // Lets the service stop; the notification goes with it.
+                ExtractionBridge.status.update { it.copy(running = false) }
             }
         }
     }

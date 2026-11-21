@@ -97,17 +97,20 @@ class AesCtrSource(
     override fun read(position: Long, dst: ByteArray, offset: Int, length: Int): Int {
         if (position < 0 || position >= size) return -1
         val n = minOf(length.toLong(), size - position).toInt()
-        val alignedStart = position and 15L.inv()
-        val head = (position - alignedStart).toInt()
-        cipher.init(Cipher.DECRYPT_MODE, keySpec, IvParameterSpec(AesUtil.ncaCounter(upperIv, counterBase + alignedStart)))
+        // The keystream is aligned to 16 bytes of the NCA offset, which need not be where [inner] starts.
+        val absolute = counterBase + position
+        val alignedAbsolute = absolute and 15L.inv()
+        val head = (absolute - alignedAbsolute).toInt()
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, IvParameterSpec(AesUtil.ncaCounter(upperIv, alignedAbsolute)))
         if (head == 0) {
             // Fast path (bulk sequential reads): read straight into the caller's buffer and decrypt in place.
             inner.readFully(position, dst, offset, n)
             cipher.doFinal(dst, offset, n, dst, offset)
             return n
         }
+        // Start the keystream [head] bytes early: those bytes are not read, only skipped over.
         val buf = ByteArray(head + n)
-        inner.readFully(alignedStart, buf)
+        inner.readFully(position, buf, head, n)
         val plain = cipher.doFinal(buf)
         System.arraycopy(plain, head, dst, offset, n)
         return n

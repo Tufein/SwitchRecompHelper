@@ -15,7 +15,9 @@ class NspNszTest {
     private fun assertExtracted(sink: MemorySink, exefs: Map<String, ByteArray> = img.exefsFiles, romfs: Map<String, ByteArray> = img.romfsFiles) {
         for ((n, d) in exefs) assertContentEquals(d, sink.bytes("${hexId()}/exefs/$n"), n)
         for ((n, d) in romfs) assertContentEquals(d, sink.bytes("${hexId()}/romfs/$n"), n)
-        assertEquals(exefs.size + romfs.size, sink.files.size)
+        // + recomp_info.toml (the test ExeFS has no real NSO, so no exefs_uncompressed/ copies)
+        assertEquals(exefs.size + romfs.size + 1, sink.files.size)
+        assertTrue(sink.files.containsKey("${hexId()}/${RecompInfo.FILE_NAME}"))
     }
 
     private fun extract(file: ByteArray, k: KeySet = keys, sink: MemorySink = MemorySink(), l: ProgressListener = object : ProgressListener {}): MemorySink {
