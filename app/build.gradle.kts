@@ -35,7 +35,7 @@ android {
 dependencies {
     implementation(project(":core"))
     // zstd for NSZ/NCZ: the AAR carries the Android native libraries (core only compiles against the API)
-    implementation("com.github.luben:zstd-jni:1.5.6-4@aar")
+    implementation("com.github.luben:zstd-jni:1.5.7-28@aar")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
