@@ -11,8 +11,8 @@ android {
         applicationId = "com.tufein.switchrecomphelper"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.6.0"
+        versionCode = 7
+        versionName = "0.7.0"
     }
 
     buildTypes {
@@ -37,6 +37,7 @@ dependencies {
     // zstd for NSZ/NCZ: the AAR carries the Android native libraries (core only compiles against the API)
     implementation("com.github.luben:zstd-jni:1.5.6-4@aar")
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.security:security-crypto:1.1.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.activity:activity-ktx:1.9.3")

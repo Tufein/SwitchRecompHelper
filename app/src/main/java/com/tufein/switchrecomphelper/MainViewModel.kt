@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.io.File
 import java.io.FileInputStream
 
 data class UiState(
@@ -42,7 +41,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state
 
-    private val keysFile = File(app.filesDir, "prod.keys")
     @Volatile private var keys: KeySet? = null
     private var job: Job? = null
 
@@ -50,10 +48,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile private var pendingFile = ""
 
     init {
-        // Keys imported earlier are kept in app-private storage. Read them off the main thread so startup stays smooth.
+        // Keys imported earlier are kept in Keystore-encrypted storage; a plain-text prod.keys from
+        // an older version is migrated once and deleted. Read off the main thread so startup stays smooth.
         viewModelScope.launch(Dispatchers.IO) {
-            if (!keysFile.exists()) return@launch
-            val loaded = runCatching { KeySet.parse(keysFile.readText()) }.getOrNull()?.takeIf { it.hasHeaderKey } ?: return@launch
+            val text = SecureKeyStore.loadOrMigrate(app) ?: return@launch
+            val loaded = runCatching { KeySet.parse(text) }.getOrNull()?.takeIf { it.hasHeaderKey } ?: return@launch
             if (keys == null) { // a fresh import wins
                 keys = loaded
                 _state.update { s -> s.copy(keysText = getString(R.string.keys_loaded, loaded.size)) }
@@ -84,7 +83,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _state.update { it.copy(message = getString(R.string.keys_invalid), isError = true) }
                     return@launch
                 }
-                keysFile.writeText(text)
+                SecureKeyStore.save(getApplication(), text)
                 keys = parsed
                 _state.update { it.copy(keysText = getString(R.string.keys_loaded, parsed.size), message = "", isError = false) }
             } catch (e: Exception) {
