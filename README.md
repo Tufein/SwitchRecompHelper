@@ -5,7 +5,7 @@ Android-app die een XCI-dump van je **eigen** Switch-cartridge uitpakt naar **Ex
 
 ## Gebruik
 1. Installeer de APK (`./gradlew :app:assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`).
-2. Kies je `prod.keys` (van je eigen console, bv. met Lockpick_RCM). De app bevat **geen** sleutels en bewaart ze alleen in app-privé opslag.
+2. Kies je `prod.keys` (van je eigen console, bv. met Lockpick_RCM). De app bevat **geen** sleutels en bewaart ze versleuteld met de Android Keystore in app-privé opslag; een platte `prod.keys` van een oudere versie wordt eenmalig gemigreerd en verwijderd.
 3. Kies de `.xci`-dump en een uitvoermap (Storage Access Framework, geen opslagrechten nodig).
 4. Uitpakken. Resultaat:
 
@@ -16,6 +16,9 @@ Android-app die een XCI-dump van je **eigen** Switch-cartridge uitpakt naar **Ex
     romfs/                gamedata
     recomp_info.toml      title-ID, build-ID's en SHA-256 van de ExeFS-bestanden
 ```
+
+## Nieuw in 0.7.0
+- **Sleutels versleuteld opgeslagen**: `prod.keys` staat niet meer als platte tekst in de app-map, maar in Keystore-versleutelde opslag (AES-256-GCM). Een bestaande platte `prod.keys` wordt bij de eerste start eenmalig gemigreerd en gewist.
 
 ## Nieuw in 0.6.0
 - **Updates worden toegepast** (BKTR-patches): als de update in hetzelfde bestand zit als de basisgame (de update-partitie van een XCI, of een NSP/NSZ met beide), wordt de RomFS van de update op de basisgame toegepast, en de ExeFS van de update vervangt die van de basisgame. Zonder basisgame in het bestand wordt de update overgeslagen met een melding. De uitvoer staat onder de title-ID van de basisgame.
